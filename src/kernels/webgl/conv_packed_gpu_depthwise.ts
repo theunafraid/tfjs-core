@@ -45,14 +45,18 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
 
       void main() {
         vec4 result = vec4(0);
+        ivec4 tlCoords = getOutputCoords();
+        int batch = tlCoords.x;
 
         for(int row=0; row<=1; row++) {
           for(int col=0; col<=1; col++) {
-            ivec4 coords = getOutputCoords();
+            ivec4 coords = tlCoords;
             coords.z += row;
             coords.w += col;
 
-            int batch = coords.x;
+            if(coords.z >= ${this.outputShape[2]} || coords.w >= ${this.outputShape[3]}) {
+              continue;
+            }
 
             ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;
             int d2 = coords.w;
@@ -61,10 +65,6 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
 
             int xRCorner = xRCCorner.x;
             int xCCorner = xRCCorner.y;
-
-            if(coords.z >= ${this.outputShape[2]} || coords.w >= ${this.outputShape[3]}) {
-              continue;
-            }
 
             float dotProd = 0.0;
             for(int wR = 0; wR < ${filterHeight}; wR++) {
