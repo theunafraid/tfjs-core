@@ -50,6 +50,7 @@ import * as binaryop_complex_gpu from './webgl/binaryop_complex_gpu';
 import {BinaryOpComplexProgram} from './webgl/binaryop_complex_gpu';
 import * as binaryop_gpu from './webgl/binaryop_gpu';
 import {BinaryOpProgram} from './webgl/binaryop_gpu';
+import {BinaryOpPackedProgram} from './webgl/binary_packed_gpu';
 import {ClipProgram} from './webgl/clip_gpu';
 import {ComplexAbsProgram} from './webgl/complex_abs_gpu';
 import {ConcatProgram} from './webgl/concat_gpu';
@@ -1158,10 +1159,10 @@ export class MathBackendWebGL implements KernelBackend {
       return this.complexSeparableBinaryOp(a, b, binaryop_gpu.ADD);
     }
 
-    const program = new BinaryOpProgram(binaryop_gpu.ADD, a.shape, b.shape);
+    const program = new BinaryOpPackedProgram(binaryop_gpu.ADD, a.shape, b.shape);
     const output =
         this.makeOutputArray(
-            program.outputShape, upcastType(a.dtype, b.dtype)) as Tensor;
+            program.outputShape, upcastType(a.dtype, b.dtype), true) as Tensor;
     return this.compileAndRun<Tensor>(program, [a, b], output);
   }
 
@@ -1745,9 +1746,11 @@ export class MathBackendWebGL implements KernelBackend {
         .reshape(resultShape);
   }
 
-  private makeOutputArray<T extends Tensor>(shape: number[], dtype: DataType):
+  private makeOutputArray<T extends Tensor>(shape: number[], dtype: DataType, isPacked = false):
       T {
-    return Tensor.make(shape, {}, dtype) as T;
+    const tensor = Tensor.make(shape, {}, dtype);
+    this.texData.get(tensor.dataId).isPacked = isPacked;
+    return tensor as T;
   }
 
   private makePackedTensor<T extends Tensor>(shape: number[]): T {

@@ -4937,19 +4937,43 @@
         return keptDims.map(function (d) { return params[d]; }).join(', ');
     }
 
-    var ClipProgram = (function () {
-        function ClipProgram(aShape, min, max) {
-            this.variableNames = ['A'];
-            this.usesPackedTextures = true;
-            this.outputShape = aShape;
-            var rank = aShape.length;
-            var dtype = getCoordsDataType(rank);
-            var sourceCoords = getSourceCoords(rank);
-            this.userCode = "\n      void main() {\n        " + dtype + " rc = getOutputCoords();\n        vec4 value = getA(" + sourceCoords + ");\n\n        setOutput(clamp(value, vec4(" + min + "), vec4(" + max + ")));\n      }\n    ";
-        }
-        return ClipProgram;
-    }());
     var dims = ['rc.x', 'rc.y', 'rc.z', 'rc.w'];
+    var BinaryOpPackedProgram = (function () {
+        function BinaryOpPackedProgram(op, aShape, bShape) {
+            this.variableNames = ['A', 'B'];
+            this.usesPackedTextures = true;
+            this.outputShape =
+                assertAndGetBroadcastShape(aShape, bShape);
+            var rank = this.outputShape.length;
+            var dtype = getCoordsDataType(rank);
+            var sourceCoordsA = getSourceCoords(aShape.length);
+            var sourceCoordsB = getSourceCoords(bShape.length);
+            if (bShape.length !== rank) {
+                sourceCoordsB = dims[rank - 1];
+            }
+            var bSample = '';
+            if (bShape.length !== rank) {
+                bSample = "\n        vec4 bSample = getB(" + sourceCoordsB + ");\n        vec4 b = vec4(bSample.xy, bSample.xy);\n      ";
+            }
+            else {
+                bSample = "\n        vec4 b = getB(" + sourceCoordsB + ");\n      ";
+            }
+            this.userCode = "\n      uniform float NAN;\n      vec4 binaryOperation(vec4 a, vec4 b) {\n        " + op + "\n      }\n\n      void main() {\n        " + dtype + " rc = getOutputCoords();\n        vec4 a = getA(" + sourceCoordsA + ");\n        " + bSample + "\n        setOutput(binaryOperation(a, b));\n      }\n    ";
+        }
+        BinaryOpPackedProgram.prototype.getCustomSetupFunc = function () {
+            var _this = this;
+            return function (gpgpu, webGLProgram) {
+                if (_this.startLoc == null) {
+                    _this.startLoc = gpgpu.getUniformLocationNoThrow(webGLProgram, 'NAN');
+                    if (_this.startLoc == null) {
+                        return;
+                    }
+                }
+                gpgpu.gl.uniform1f(_this.startLoc, NaN);
+            };
+        };
+        return BinaryOpPackedProgram;
+    }());
     function getSourceCoords(rank) {
         if (rank === 1) {
             return 'rc';
@@ -4957,6 +4981,33 @@
         var coords = '';
         for (var i = 0; i < rank; i++) {
             coords += dims[i];
+            if (i < rank - 1) {
+                coords += ',';
+            }
+        }
+        return coords;
+    }
+
+    var ClipProgram = (function () {
+        function ClipProgram(aShape, min, max) {
+            this.variableNames = ['A'];
+            this.usesPackedTextures = true;
+            this.outputShape = aShape;
+            var rank = aShape.length;
+            var dtype = getCoordsDataType(rank);
+            var sourceCoords = getSourceCoords$1(rank);
+            this.userCode = "\n      void main() {\n        " + dtype + " rc = getOutputCoords();\n        vec4 value = getA(" + sourceCoords + ");\n\n        setOutput(clamp(value, vec4(" + min + "), vec4(" + max + ")));\n      }\n    ";
+        }
+        return ClipProgram;
+    }());
+    var dims$1 = ['rc.x', 'rc.y', 'rc.z', 'rc.w'];
+    function getSourceCoords$1(rank) {
+        if (rank === 1) {
+            return 'rc';
+        }
+        var coords = '';
+        for (var i = 0; i < rank; i++) {
+            coords += dims$1[i];
             if (i < rank - 1) {
                 coords += ',';
             }
@@ -5257,12 +5308,12 @@
             this.outputShape = outputShape;
             this.rank = outputShape.length;
             var dtype = getCoordsDataType(this.rank);
-            var sourceCoords = getSourceCoords$1(aShape, axis);
+            var sourceCoords = getSourceCoords$2(aShape, axis);
             this.userCode = "\n      void main() {\n        " + dtype + " resRC = getOutputCoords();\n        setOutput(getA(" + sourceCoords + "));\n      }\n    ";
         }
         return GatherProgram;
     }());
-    function getSourceCoords$1(aShape, axis) {
+    function getSourceCoords$2(aShape, axis) {
         var rank = aShape.length;
         if (rank > 4) {
             throw Error("Gather for rank " + rank + " is not yet supported");
@@ -6697,7 +6748,7 @@
         }
         return getVecChannels(name, rank);
     }
-    function getSourceCoords$2(rank, dims) {
+    function getSourceCoords$3(rank, dims) {
         if (rank === 1) {
             return 'rc';
         }
@@ -7350,12 +7401,12 @@
             this.outputShape = outputShape;
             this.rank = outputShape.length;
             var dtype = getCoordsDataType(this.rank);
-            var sourceCoords = getSourceCoords$3(aShape);
+            var sourceCoords = getSourceCoords$4(aShape);
             this.userCode = "\n      void main() {\n        " + dtype + " resRC = getOutputCoords();\n        setOutput(getA(" + sourceCoords + "));\n      }\n    ";
         }
         return TileProgram;
     }());
-    function getSourceCoords$3(aShape) {
+    function getSourceCoords$4(aShape) {
         var rank = aShape.length;
         if (rank > 5) {
             throw Error("Tile for rank " + rank + " is not yet supported");
@@ -7477,7 +7528,7 @@
             var rank = outputShape.length;
             var channels = getChannels('rc', rank);
             var dtype = getCoordsDataType(rank);
-            var sourceCoords = getSourceCoords$2(rank, channels);
+            var sourceCoords = getSourceCoords$3(rank, channels);
             var innerDims = channels.slice(-2);
             var coords = rank === 1 ? 'rc' : "vec2(" + innerDims.join(',') + ")";
             this.userCode = "\n      void main() {\n        " + dtype + " rc = getOutputCoords();\n        vec4 packedInput = getA(" + sourceCoords + ");\n\n        setOutput(getChannel(packedInput, " + coords + "));\n      }\n    ";
@@ -9856,8 +9907,8 @@
             if (a.dtype === 'complex64' && b.dtype === 'complex64') {
                 return this.complexSeparableBinaryOp(a, b, ADD);
             }
-            var program = new BinaryOpProgram(ADD, a.shape, b.shape);
-            var output = this.makeOutputArray(program.outputShape, upcastType(a.dtype, b.dtype));
+            var program = new BinaryOpPackedProgram(ADD, a.shape, b.shape);
+            var output = this.makeOutputArray(program.outputShape, upcastType(a.dtype, b.dtype), true);
             return this.compileAndRun(program, [a, b], output);
         };
         MathBackendWebGL.prototype.complexSeparableBinaryOp = function (a, b, op) {
@@ -10257,8 +10308,11 @@
             return this.compileAndRun(program, [flattenX, flattenIndices])
                 .reshape(resultShape);
         };
-        MathBackendWebGL.prototype.makeOutputArray = function (shape, dtype) {
-            return Tensor.make(shape, {}, dtype);
+        MathBackendWebGL.prototype.makeOutputArray = function (shape, dtype, isPacked) {
+            if (isPacked === void 0) { isPacked = false; }
+            var tensor$$1 = Tensor.make(shape, {}, dtype);
+            this.texData.get(tensor$$1.dataId).isPacked = isPacked;
+            return tensor$$1;
         };
         MathBackendWebGL.prototype.makePackedTensor = function (shape) {
             var packedTensor = Tensor.make(shape, {});
