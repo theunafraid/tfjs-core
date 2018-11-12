@@ -5110,9 +5110,10 @@
         return Conv2DProgram;
     }());
 
-    var DepthwiseConv2DProgram = (function () {
-        function DepthwiseConv2DProgram(convInfo) {
+    var DepthwiseConv2DPackedProgram = (function () {
+        function DepthwiseConv2DPackedProgram(convInfo) {
             this.variableNames = ['x', 'W'];
+            this.usesPackedTextures = true;
             this.outputShape = convInfo.outShape;
             var xNumRows = convInfo.inHeight;
             var xNumCols = convInfo.inWidth;
@@ -5125,9 +5126,9 @@
             var filterHeight = convInfo.filterHeight;
             var filterWidth = convInfo.filterWidth;
             var channelMul = convInfo.outChannels / convInfo.inChannels;
-            this.userCode = "\n      const ivec2 strides = ivec2(" + strideHeight + ", " + strideWidth + ");\n      const ivec2 pads = ivec2(" + padTop + ", " + padLeft + ");\n\n      void main() {\n        ivec4 coords = getOutputCoords();\n        int batch = coords.x;\n        ivec2 xRCCorner = coords.yz * strides - pads;\n        int d2 = coords.w;\n        int d1 = d2 / " + channelMul + ";\n        int q = d2 - d1 * " + channelMul + ";\n\n        int xRCorner = xRCCorner.x;\n        int xCCorner = xRCCorner.y;\n\n        // Convolve x(?, ?, d1) with w(:, :, d1, q) to get y(yR, yC, d2).\n        // ? = to be determined. : = across all values in that axis.\n        float dotProd = 0.0;\n        // TODO(dsmilkov): Flatten the two for loops and vec4 the operations.\n        for (int wR = 0; wR < " + filterHeight + "; wR++) {\n          int xR = xRCorner + wR * " + dilationHeight + ";\n\n          if (xR < 0 || xR >= " + xNumRows + ") {\n            continue;\n          }\n\n          for (int wC = 0; wC < " + filterWidth + "; wC++) {\n            int xC = xCCorner + wC * " + dilationWidth + ";\n\n            if (xC < 0 || xC >= " + xNumCols + ") {\n              continue;\n            }\n\n            float xVal = getX(batch, xR, xC, d1);\n            float wVal = getW(wR, wC, d1, q);\n            dotProd += xVal * wVal;\n          }\n        }\n        setOutput(dotProd);\n      }\n    ";
+            this.userCode = "\n      const vec2 strides = vec2(" + strideHeight + ", " + strideWidth + ");\n      const vec2 pads = vec2(" + padTop + ", " + padLeft + ");\n\n      void main() {\n        ivec4 coords = getOutputCoords();\n        int batch = coords.x;\n\n        vec4 result = vec4(0);\n\n        for(int row=0; row<=1; row++) {\n          for(int col=0; col<=1; col++) {\n            // one channel\n            int d2 = coords.w + col;\n            int d1 = d2 / " + channelMul + ";\n            int q = d2 - d1 * " + channelMul + ";\n\n            vec2 xRCCorner = dot(vec2(coords.y, coords.z + row), strides) - pads;\n            int xRCorner = int(xRCCorner.x);\n            int xCCorner = int(xRCCorner.y);\n\n            float dotProd = 0.0;\n\n            for(int wR = 0; wR < " + filterHeight + "; wR += 2) {\n              int xR = xRCorner + wR * " + dilationHeight + ";\n\n              if(xR < 0 || xR >= " + xNumRows + ") {\n                continue;\n              }\n\n              for(int wC = 0; wC < " + filterWidth + "; wC += 2) {\n                int xC = xCCorner + wC * " + dilationWidth + ";\n\n                if(xC < 0 || xC >= " + xNumCols + ") {\n                  continue;\n                }\n\n                vec4 xVal = getX(batch, xR, xC, d1);\n                vec4 wVal = getW(wR, wC, d1, q);\n                dotProd += dot(xVal, wVal);\n              }\n\n            }\n\n            result[row * 2 + col] = dotProd;\n          }\n        }\n\n        gl_FragColor = result;\n      }\n    ";
         }
-        return DepthwiseConv2DProgram;
+        return DepthwiseConv2DPackedProgram;
     }());
 
     var CropAndResizeProgram = (function () {
@@ -10151,8 +10152,8 @@
             return this.compileAndRun(program, [x, dy]);
         };
         MathBackendWebGL.prototype.depthwiseConv2D = function (x, filter, convInfo) {
-            var program = new DepthwiseConv2DProgram(convInfo);
-            return this.compileAndRun(program, [x, filter]);
+            var program = new DepthwiseConv2DPackedProgram(convInfo);
+            return this.compileAndRun(program, [x, filter], this.makePackedTensor(program.outputShape));
         };
         MathBackendWebGL.prototype.depthwiseConv2DDerInput = function (dy, filter, convInfo) {
             var program = new DepthwiseConv2DDerInputProgram(convInfo);

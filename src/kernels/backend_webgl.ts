@@ -57,7 +57,8 @@ import {ConcatProgram} from './webgl/concat_gpu';
 import {Conv2DDerFilterProgram, Conv2DDerInputProgram} from './webgl/conv_backprop_gpu';
 import {DepthwiseConv2DDerFilterProgram, DepthwiseConv2DDerInputProgram} from './webgl/conv_backprop_gpu_depthwise';
 import {Conv2DProgram} from './webgl/conv_gpu';
-import {DepthwiseConv2DProgram} from './webgl/conv_gpu_depthwise';
+// import {DepthwiseConv2DProgram} from './webgl/conv_gpu_depthwise';
+import {DepthwiseConv2DPackedProgram} from './webgl/conv_packed_gpu_depthwise';
 import {CropAndResizeProgram} from './webgl/crop_and_resize_gpu';
 import {CumSumProgram} from './webgl/cumsum_gpu';
 import {DepthToSpaceProgram} from './webgl/depth_to_space_gpu';
@@ -1502,8 +1503,8 @@ export class MathBackendWebGL implements KernelBackend {
 
   depthwiseConv2D(x: Tensor4D, filter: Tensor4D, convInfo: Conv2DInfo):
       Tensor4D {
-    const program = new DepthwiseConv2DProgram(convInfo);
-    return this.compileAndRun(program, [x, filter]);
+    const program = new DepthwiseConv2DPackedProgram(convInfo);
+    return this.compileAndRun(program, [x, filter], this.makePackedTensor(program.outputShape));
   }
 
   depthwiseConv2DDerInput(dy: Tensor4D, filter: Tensor4D, convInfo: Conv2DInfo):
