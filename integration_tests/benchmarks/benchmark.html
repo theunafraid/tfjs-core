@@ -262,8 +262,14 @@
       const oldLog = console.log;
       let kernels = [];
       console.log = msg => {
-        const parts = msg.split('\t').map(x => x.slice(2));
-        if(parts.length) {
+        let parts = [];
+        if(typeof msg === 'string') {
+          parts = msg.split('\t').map(x => x.slice(2));
+        }
+
+        if(parts.length > 2) {
+          // heuristic for determining whether we've caught a profiler
+          // log statement as opposed to a regular console.log
           const scopes = parts[0].trim()
             .split('||')
             .filter(s => s !== 'unnamed scope');
@@ -273,6 +279,8 @@
             output: parts[2].trim(),
             gpuProgramsInfo: parts[4]
           });
+        } else {
+          oldLog.call(oldLog, msg);
         }
       }
       let res = predict(model);

@@ -736,18 +736,22 @@ export class MathBackendWebGL implements KernelBackend {
       inputs.push(scale);
     }
 
-    let output = null;
-    let envSpecificBatchNormProgram = BatchNormProgram;
-
     if (ENV.get('WEBGL_PACK_BATCHNORMALIZATION')) {
-      output = this.makePackedTensor(x.shape);
-      envSpecificBatchNormProgram = BatchNormPackedProgram;
+      const batchNormPackedProgram = new BatchNormPackedProgram(
+          x.shape, mean.shape, variance.shape, offsetShape, scaleShape,
+          varianceEpsilon);
+      let result = this.compileAndRun(
+          batchNormPackedProgram, inputs, this.makePackedTensor(x.shape));
+      if (ENV.get('WEBGL_LAZILY_UNPACK') === false) {
+        result = this.unpackTensor(result);
+      }
+      return result as Tensor4D;
     }
 
-    const program = new envSpecificBatchNormProgram(
+    const batchNormProgram = new BatchNormProgram(
         x.shape, mean.shape, variance.shape, offsetShape, scaleShape,
         varianceEpsilon);
-    return this.compileAndRun(program, inputs, output);
+    return this.compileAndRun(batchNormProgram, inputs);
   }
 
   localResponseNormalization4D(
@@ -1812,24 +1816,31 @@ export class MathBackendWebGL implements KernelBackend {
       }
 
       let texData = this.texData.get(input.dataId);
-      // Upload small tensors that live on the CPU as uniforms, not as
-      // textures. Do this only when the environment supports 32bit floats due
-      // to problems when comparing 16bit floats with 32bit floats.
-      // TODO(https://github.com/tensorflow/tfjs/issues/821): Make it possible
-      // for packed shaders to sample from uniforms.
-      if (texData.texture == null &&
-          !(!texData.isPacked && program.usesPackedTextures) &&
-          util.sizeFromShape(input.shape) <=
-              ENV.get('WEBGL_SIZE_UPLOAD_UNIFORM')) {
-        return {
-          shape: input.shape,
-          texData: null,
-          isUniform: true,
-          uniformValues: this.readSync(input.dataId)
-        };
-      }
 
-      if (texData.isPacked !== !!program.usesPackedTextures) {
+      if (texData.texture == null) {
+        // Upload small tensors that live on the CPU as uniforms, not as
+        // textures. Do this only when the environment supports 32bit floats due
+        // to problems when comparing 16bit floats with 32bit floats.
+        // TODO(https://github.com/tensorflow/tfjs/issues/821): Make it possible
+        // for packed shaders to sample from uniforms.
+        if (!(!texData.isPacked && program.usesPackedTextures) &&
+            util.sizeFromShape(input.shape) <=
+                ENV.get('WEBGL_SIZE_UPLOAD_UNIFORM')) {
+          return {
+            shape: input.shape,
+            texData: null,
+            isUniform: true,
+            uniformValues: this.readSync(input.dataId)
+          };
+        }
+
+        // this ensures that if a packed program's inputs have not yet been
+        // uploaded to the GPU, they get uploaded as packed right off the bat
+        if (program.usesPackedTextures) {
+          texData.isPacked = true;
+          texData.shape = input.shape;
+        }
+      } else if (texData.isPacked !== !!program.usesPackedTextures) {
         let preProcessProgram: UnpackProgram|PackProgram;
         let processedInput: Tensor;
         if (texData.isPacked) {
@@ -1843,6 +1854,25 @@ export class MathBackendWebGL implements KernelBackend {
 
         texData = this.texData.get(processedInput.dataId);
         input = processedInput;
+      } else if (
+          texData.isPacked &&
+          !webgl_util.isReshapeFree(texData.shape, input.shape)) {
+        // This is a special, temporary case where a texture exists for a tensor
+        // but the shapes are incompatible (due to packing constraints) because
+        // the tensor did not have a chance to go through the packed reshape
+        // shader. This only happens when we reshape the *same* tensor to form
+        // *distinct* inputs to an op, e.g. dotting a vector with itself. This
+        // case will disappear once packed uploading is the default.
+
+        // Temporarily disable delayedStorage so the texture isn't removed from
+        // the original input
+        this.delayedStorage = false;
+        const inputValues = (input as Tensor).dataSync();
+        this.delayedStorage = true;
+
+        input = Tensor.make(input.shape, {values: inputValues}, input.dtype);
+        texData = this.texData.get(input.dataId);
+        texData.isPacked = true;
       }
 
       this.uploadToGPU(input.dataId);
@@ -1960,7 +1990,8 @@ export class MathBackendWebGL implements KernelBackend {
         const rows = shape.length > 1 ? shape[shape.length - 2] : 1;
         const cols = shape[shape.length - 1];
         this.gpgpu.uploadMatrixToPackedTexture(
-            newTexture, batch, rows, cols, typedArrayToFloat32(values, dtype));
+            newTexture, batch, rows, cols, texShape[0], texShape[1],
+            typedArrayToFloat32(values, dtype));
       } else {
         this.gpgpu.uploadMatrixToTexture(
             newTexture, texShape[0], texShape[1],
