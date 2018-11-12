@@ -309,11 +309,11 @@ export class Environment {
     } else if (feature === 'WEBGL_CPU_FORWARD') {
       return true;
     } else if (feature === 'WEBGL_PACK_BATCHNORMALIZATION') {
-      return false;
+      return true;
     } else if (feature === 'WEBGL_LAZILY_UNPACK') {
-      return false;
+      return true;
     } else if (feature === 'WEBGL_CONV_IM2COL') {
-      return false;
+      return true;
     } else if (feature === 'WEBGL_PAGING_ENABLED') {
       return this.get('IS_BROWSER') && !this.get('PROD');
     } else if (feature === 'WEBGL_MAX_TEXTURE_SIZE') {
