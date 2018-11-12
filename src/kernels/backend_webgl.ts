@@ -1330,7 +1330,7 @@ export class MathBackendWebGL implements KernelBackend {
 
   clip<T extends Tensor>(x: T, min: number, max: number): T {
     const program = new ClipProgram(x.shape, min, max);
-    return this.compileAndRun(program, [x]) as T;
+    return this.compileAndRun(program, [x], this.makePackedTensor(program.outputShape)) as T;
   }
 
   abs<T extends Tensor>(x: T): T {
@@ -1836,10 +1836,8 @@ export class MathBackendWebGL implements KernelBackend {
 
         // this ensures that if a packed program's inputs have not yet been
         // uploaded to the GPU, they get uploaded as packed right off the bat
-        if (program.usesPackedTextures) {
-          texData.isPacked = true;
-          texData.shape = input.shape;
-        }
+        texData.shape = input.shape;
+        texData.isPacked = !!program.usesPackedTextures;
       } else if (texData.isPacked !== !!program.usesPackedTextures) {
         let preProcessProgram: UnpackProgram|PackProgram;
         let processedInput: Tensor;
