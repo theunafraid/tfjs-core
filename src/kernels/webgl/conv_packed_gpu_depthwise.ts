@@ -40,54 +40,59 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     const channelMul = convInfo.outChannels / convInfo.inChannels;
 
     this.userCode = `
-      const vec2 strides = vec2(${strideHeight}, ${strideWidth});
-      const vec2 pads = vec2(${padTop}, ${padLeft});
+      const ivec2 strides = ivec2(${strideHeight}, ${strideWidth});
+      const ivec2 pads = ivec2(${padTop}, ${padLeft});
 
       void main() {
-        ivec4 coords = getOutputCoords();
-        int batch = coords.x;
-
         vec4 result = vec4(0);
 
         for(int row=0; row<=1; row++) {
           for(int col=0; col<=1; col++) {
-            // one channel
-            int d2 = coords.w + col;
+            ivec4 coords = getOutputCoords();
+            coords.z += row;
+            coords.w += col;
+
+            int batch = coords.x;
+
+            ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;
+            int d2 = coords.w;
             int d1 = d2 / ${channelMul};
             int q = d2 - d1 * ${channelMul};
 
-            vec2 xRCCorner = dot(vec2(coords.y, coords.z + row), strides) - pads;
-            int xRCorner = int(xRCCorner.x);
-            int xCCorner = int(xRCCorner.y);
+            int xRCorner = xRCCorner.x;
+            int xCCorner = xRCCorner.y;
+
+            if(coords.z >= ${this.outputShape[2]} || coords.w >= ${this.outputShape[3]}) {
+              continue;
+            }
 
             float dotProd = 0.0;
-
-            for(int wR = 0; wR < ${filterHeight}; wR += 2) {
+            for(int wR = 0; wR < ${filterHeight}; wR++) {
               int xR = xRCorner + wR * ${dilationHeight};
 
               if(xR < 0 || xR >= ${xNumRows}) {
                 continue;
               }
 
-              for(int wC = 0; wC < ${filterWidth}; wC += 2) {
+              for(int wC = 0; wC < ${filterWidth}; wC++) {
                 int xC = xCCorner + wC * ${dilationWidth};
 
                 if(xC < 0 || xC >= ${xNumCols}) {
                   continue;
                 }
 
-                vec4 xVal = getX(batch, xR, xC, d1);
-                vec4 wVal = getW(wR, wC, d1, q);
-                dotProd += dot(xVal, wVal);
-              }
+                float xVal = getChannel(getX(batch, xR, xC, d1), vec2(xC, d1));
+                float wVal = getChannel(getW(wR, wC, d1, q), vec2(d1, q));
 
+                dotProd += xVal * wVal;
+              }
             }
 
             result[row * 2 + col] = dotProd;
           }
         }
 
-        gl_FragColor = result;
+        setOutput(result);
       }
     `;
   }
