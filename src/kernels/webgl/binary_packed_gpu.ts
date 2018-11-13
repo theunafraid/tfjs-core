@@ -21,6 +21,10 @@ import {GPGPUContext} from './gpgpu_context';
 import {GPGPUProgram} from './gpgpu_math';
 
 export const ADD = 'return a + b;';
+export const SUB = 'return a - b;';
+export const MUL = 'return a * b;';
+export const DIV = `if (a == b) return 1.0;
+  return a / b;`;
 
 const dims = ['rc.x', 'rc.y', 'rc.z', 'rc.w'];
 
@@ -40,27 +44,38 @@ export class BinaryOpPackedProgram implements GPGPUProgram {
     const rank = this.outputShape.length;
 
     const dtype = getCoordsDataType(rank);
-    let sourceCoordsA = getSourceCoords(aShape.length);
-    let aSample = 'vec4 a = aSample;';
+
+    let aSample = `vec4 aSample = getA(${getSourceCoords(aShape.length)});`;
+    let a = `vec4 a = aSample;`;
     if(aShape.length < rank) {
-      sourceCoordsA = dims.slice(0, rank).slice(-aShape.length).join(',');
+      const sourceCoordsA = dims.slice(0, rank).slice(-aShape.length).join(',');
+      aSample = `vec4 aSample = getA(${sourceCoordsA});`;
 
       if(aShape.length < 2) {
-        aSample = `
+        a = `
           vec4 a = vec4(aSample.xy, aSample.xy);
         `;
+        if(aShape.length === 0) {
+          aSample = `float aSample = getA();`;
+          a = `vec4 a = vec4(aSample);`;
+        }
       }
     }
 
-    let sourceCoordsB = getSourceCoords(bShape.length);
-    let bSample = 'vec4 b = bSample;';
+    let bSample = `vec4 bSample = getB(${getSourceCoords(bShape.length)});`;
+    let b = 'vec4 b = bSample;';
     if(bShape.length < rank) { // this means b's rank is smaller
-      sourceCoordsB = dims.slice(0, rank).slice(-bShape.length).join(',');
+      const sourceCoordsB = dims.slice(0, rank).slice(-bShape.length).join(',');
+      bSample = `vec4 bSample = getB(${sourceCoordsB});`;
 
       if(bShape.length < 2) {
-        bSample = `
+        b = `
           vec4 b = vec4(bSample.xy, bSample.xy);
         `;
+        if(bShape.length === 0) {
+          bSample = `float bSample = getB();`;
+          b = `vec4 b = vec4(bSample);`;
+        }
       }
     }
 
@@ -73,11 +88,11 @@ export class BinaryOpPackedProgram implements GPGPUProgram {
       void main() {
         ${dtype} rc = getOutputCoords();
 
-        vec4 aSample = getA(${sourceCoordsA});
         ${aSample}
+        ${a}
 
-        vec4 bSample = getB(${sourceCoordsB});
         ${bSample}
+        ${b}
 
         setOutput(binaryOperation(a, b));
       }
