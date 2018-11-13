@@ -4316,8 +4316,6 @@
     var CHECK_NAN_SNIPPET = "\n  if (isNaN(a)) return a;\n  if (isNaN(b)) return b;\n";
     var ADD = 'return a + b;';
     var SUB = 'return a - b;';
-    var MUL = 'return a * b;';
-    var DIV = "if (a == b) return 1.0;\n  return a / b;";
     var INT_DIV = "\n  float resultSign = sign(a) * sign(b);\n  int ia = round(a);\n  int ib = round(b);\n  int result = ia / ib;\n  int amodb = ia - ib * result;\n\n  if (resultSign < 0.0 && amodb != 0) {\n    result -= 1;\n  }\n  return float(result);\n";
     var POW = "\nif(a < 0.0 && floor(b) < b){\n  return NAN;\n}\nreturn (round(mod(b, 2.0)) == 0 || round(mod(b, 2.0)) == 2) ?\n    pow(abs(a), b) : sign(a) * pow(abs(a), b);\n";
     var SQUARED_DIFFERENCE = 'return (a - b) * (a - b);';
@@ -4329,8 +4327,6 @@
     var GREATER_EQUAL = "return float(a >= b);";
     var LOGICAL_AND = "return float(a >= 1.0 && b >= 1.0);";
     var LOGICAL_OR = "return float(a >= 1.0 || b >= 1.0);";
-    var MAX = CHECK_NAN_SNIPPET + "\n  return max(a, b);\n";
-    var MIN = CHECK_NAN_SNIPPET + "\n  return min(a, b);\n";
     var MOD = "if (b == 0.0) return NAN;\n  return mod(a, b);";
     var ATAN2 = CHECK_NAN_SNIPPET + "\n  return atan(a, b);\n";
     var ELU_DER = "return (b >= 1.0) ? a : a * (b + 1.0);";
@@ -4937,6 +4933,12 @@
         return keptDims.map(function (d) { return params[d]; }).join(', ');
     }
 
+    var ADD$1 = 'return a + b;';
+    var SUB$1 = 'return a - b;';
+    var MUL$1 = 'return a * b;';
+    var DIV$1 = "return a / b;";
+    var MAX$1 = "return max(a, b);";
+    var MIN$1 = "return min(a, b);";
     var dims = ['rc.x', 'rc.y', 'rc.z', 'rc.w'];
     var BinaryOpPackedProgram = (function () {
         function BinaryOpPackedProgram(op, aShape, bShape) {
@@ -4946,23 +4948,33 @@
                 assertAndGetBroadcastShape(aShape, bShape);
             var rank = this.outputShape.length;
             var dtype = getCoordsDataType(rank);
-            var sourceCoordsA = getSourceCoords(aShape.length);
-            var aSample = 'vec4 a = aSample;';
+            var aSample = "vec4 aSample = getA(" + getSourceCoords(aShape.length) + ");";
+            var a = "vec4 a = aSample;";
             if (aShape.length < rank) {
-                sourceCoordsA = dims.slice(0, rank).slice(-aShape.length).join(',');
+                var sourceCoordsA = dims.slice(0, rank).slice(-aShape.length).join(',');
+                aSample = "vec4 aSample = getA(" + sourceCoordsA + ");";
                 if (aShape.length < 2) {
-                    aSample = "\n          vec4 a = vec4(aSample.xy, aSample.xy);\n        ";
+                    a = "\n          vec4 a = vec4(aSample.xy, aSample.xy);\n        ";
+                    if (aShape.length === 0) {
+                        aSample = "float aSample = getA();";
+                        a = "vec4 a = vec4(aSample);";
+                    }
                 }
             }
-            var sourceCoordsB = getSourceCoords(bShape.length);
-            var bSample = 'vec4 b = bSample;';
+            var bSample = "vec4 bSample = getB(" + getSourceCoords(bShape.length) + ");";
+            var b = 'vec4 b = bSample;';
             if (bShape.length < rank) {
-                sourceCoordsB = dims.slice(0, rank).slice(-bShape.length).join(',');
+                var sourceCoordsB = dims.slice(0, rank).slice(-bShape.length).join(',');
+                bSample = "vec4 bSample = getB(" + sourceCoordsB + ");";
                 if (bShape.length < 2) {
-                    bSample = "\n          vec4 b = vec4(bSample.xy, bSample.xy);\n        ";
+                    b = "\n          vec4 b = vec4(bSample.xy, bSample.xy);\n        ";
+                    if (bShape.length === 0) {
+                        bSample = "float bSample = getB();";
+                        b = "vec4 b = vec4(bSample);";
+                    }
                 }
             }
-            this.userCode = "\n      uniform float NAN;\n      vec4 binaryOperation(vec4 a, vec4 b) {\n        " + op + "\n      }\n\n      void main() {\n        " + dtype + " rc = getOutputCoords();\n\n        vec4 aSample = getA(" + sourceCoordsA + ");\n        " + aSample + "\n\n        vec4 bSample = getB(" + sourceCoordsB + ");\n        " + bSample + "\n\n        setOutput(binaryOperation(a, b));\n      }\n    ";
+            this.userCode = "\n      uniform float NAN;\n      vec4 binaryOperation(vec4 a, vec4 b) {\n        " + op + "\n      }\n\n      void main() {\n        " + dtype + " rc = getOutputCoords();\n\n        " + aSample + "\n        " + a + "\n\n        " + bSample + "\n        " + b + "\n\n        setOutput(binaryOperation(a, b));\n      }\n    ";
         }
         BinaryOpPackedProgram.prototype.getCustomSetupFunc = function () {
             var _this = this;
@@ -9599,8 +9611,8 @@
             if (this.shouldExecuteOnCPU([a, b])) {
                 return this.cpuBackend.multiply(a, b);
             }
-            var program = new BinaryOpProgram(MUL, a.shape, b.shape);
-            var output = this.makeOutputArray(program.outputShape, a.dtype);
+            var program = new BinaryOpPackedProgram(MUL$1, a.shape, b.shape);
+            var output = this.makeOutputArray(program.outputShape, a.dtype, true);
             return this.compileAndRun(program, [a, b], output);
         };
         MathBackendWebGL.prototype.batchNormalization = function (x, mean, variance, varianceEpsilon, scale, offset) {
@@ -9865,8 +9877,8 @@
             if (this.shouldExecuteOnCPU([a, b])) {
                 return this.cpuBackend.minimum(a, b);
             }
-            var program = new BinaryOpProgram(MIN, a.shape, b.shape);
-            return this.compileAndRun(program, [a, b]);
+            var program = new BinaryOpPackedProgram(MIN$1, a.shape, b.shape);
+            return this.compileAndRun(program, [a, b], this.makePackedTensor(program.outputShape));
         };
         MathBackendWebGL.prototype.mod = function (a, b) {
             var program = new BinaryOpProgram(MOD, a.shape, b.shape);
@@ -9884,8 +9896,8 @@
             if (this.shouldExecuteOnCPU([a, b])) {
                 return this.cpuBackend.maximum(a, b);
             }
-            var program = new BinaryOpProgram(MAX, a.shape, b.shape);
-            return this.compileAndRun(program, [a, b]);
+            var program = new BinaryOpPackedProgram(MAX$1, a.shape, b.shape);
+            return this.compileAndRun(program, [a, b], this.makePackedTensor(program.outputShape));
         };
         MathBackendWebGL.prototype.all = function (x, axes) {
             assertAxesAreInnerMostDims('all', axes, x.rank);
@@ -9906,10 +9918,10 @@
             return this.compileAndRun(program, [a, b]);
         };
         MathBackendWebGL.prototype.realDivide = function (a, b) {
-            var op = DIV;
+            var op = DIV$1;
             var outputDtype = 'float32';
-            var program = new BinaryOpProgram(op, a.shape, b.shape);
-            var output = this.makeOutputArray(program.outputShape, outputDtype);
+            var program = new BinaryOpPackedProgram(op, a.shape, b.shape);
+            var output = this.makeOutputArray(program.outputShape, outputDtype, true);
             return this.compileAndRun(program, [a, b], output);
         };
         MathBackendWebGL.prototype.floorDiv = function (a, b) {
@@ -9923,7 +9935,7 @@
             if (a.dtype === 'complex64' && b.dtype === 'complex64') {
                 return this.complexSeparableBinaryOp(a, b, ADD);
             }
-            var program = new BinaryOpPackedProgram(ADD, a.shape, b.shape);
+            var program = new BinaryOpPackedProgram(ADD$1, a.shape, b.shape);
             var output = this.makeOutputArray(program.outputShape, upcastType(a.dtype, b.dtype), true);
             return this.compileAndRun(program, [a, b], output);
         };
@@ -9968,8 +9980,8 @@
             if (this.shouldExecuteOnCPU([a, b])) {
                 return this.cpuBackend.subtract(a, b);
             }
-            var program = new BinaryOpProgram(SUB, a.shape, b.shape);
-            var output = this.makeOutputArray(program.outputShape, upcastType(a.dtype, b.dtype));
+            var program = new BinaryOpPackedProgram(SUB$1, a.shape, b.shape);
+            var output = this.makeOutputArray(program.outputShape, upcastType(a.dtype, b.dtype), true);
             return this.compileAndRun(program, [a, b], output);
         };
         MathBackendWebGL.prototype.pow = function (a, b) {
@@ -10379,9 +10391,10 @@
                 }
                 var texData = _this.texData.get(input.dataId);
                 if (texData.texture == null) {
-                    if (!(!texData.isPacked && program.usesPackedTextures) &&
-                        sizeFromShape(input.shape) <=
-                            ENV.get('WEBGL_SIZE_UPLOAD_UNIFORM')) {
+                    if (input.shape.length === 0 ||
+                        (!(!texData.isPacked && program.usesPackedTextures) &&
+                            sizeFromShape(input.shape) <=
+                                ENV.get('WEBGL_SIZE_UPLOAD_UNIFORM'))) {
                         return {
                             shape: input.shape,
                             texData: null,
