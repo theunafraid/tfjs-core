@@ -51,6 +51,7 @@ import {BinaryOpComplexProgram} from './webgl/binaryop_complex_gpu';
 import * as binaryop_gpu from './webgl/binaryop_gpu';
 import {BinaryOpProgram} from './webgl/binaryop_gpu';
 import {BinaryOpPackedProgram} from './webgl/binary_packed_gpu';
+import * as binaryop_packed_gpu from './webgl/binary_packed_gpu';
 import {ClipProgram} from './webgl/clip_gpu';
 import {ComplexAbsProgram} from './webgl/complex_abs_gpu';
 import {ConcatProgram} from './webgl/concat_gpu';
@@ -715,7 +716,7 @@ export class MathBackendWebGL implements KernelBackend {
       return this.cpuBackend.multiply(a, b);
     }
 
-    const program = new BinaryOpPackedProgram(binaryop_gpu.MUL, a.shape, b.shape);
+    const program = new BinaryOpPackedProgram(binaryop_packed_gpu.MUL, a.shape, b.shape);
     const output = this.makeOutputArray(program.outputShape, a.dtype, true) as Tensor;
     return this.compileAndRun(program, [a, b], output) as Tensor;
   }
@@ -1111,8 +1112,8 @@ export class MathBackendWebGL implements KernelBackend {
       return this.cpuBackend.maximum(a, b);
     }
 
-    const program = new BinaryOpProgram(binaryop_gpu.MAX, a.shape, b.shape);
-    return this.compileAndRun(program, [a, b]);
+    const program = new BinaryOpPackedProgram(binaryop_packed_gpu.MAX, a.shape, b.shape);
+    return this.compileAndRun(program, [a, b], this.makePackedTensor(program.outputShape));
   }
 
   all(x: Tensor, axes: number[]): Tensor {
@@ -1160,7 +1161,7 @@ export class MathBackendWebGL implements KernelBackend {
       return this.complexSeparableBinaryOp(a, b, binaryop_gpu.ADD);
     }
 
-    const program = new BinaryOpPackedProgram(binaryop_gpu.ADD, a.shape, b.shape);
+    const program = new BinaryOpPackedProgram(binaryop_packed_gpu.ADD, a.shape, b.shape);
     const output =
         this.makeOutputArray(
             program.outputShape, upcastType(a.dtype, b.dtype), true) as Tensor;
