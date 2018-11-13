@@ -1088,8 +1088,8 @@ export class MathBackendWebGL implements KernelBackend {
       return this.cpuBackend.minimum(a, b);
     }
 
-    const program = new BinaryOpProgram(binaryop_gpu.MIN, a.shape, b.shape);
-    return this.compileAndRun(program, [a, b]);
+    const program = new BinaryOpPackedProgram(binaryop_packed_gpu.MIN, a.shape, b.shape);
+    return this.compileAndRun(program, [a, b], this.makePackedTensor(program.outputShape));
   }
 
   mod(a: Tensor, b: Tensor): Tensor {
