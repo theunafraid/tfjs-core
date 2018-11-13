@@ -23,8 +23,7 @@ import {GPGPUProgram} from './gpgpu_math';
 export const ADD = 'return a + b;';
 export const SUB = 'return a - b;';
 export const MUL = 'return a * b;';
-export const DIV = `if (a == b) return 1.0;
-  return a / b;`;
+export const DIV = `return a / b;`;
 
 export const MAX = `return max(a, b);`;
 

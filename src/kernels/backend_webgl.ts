@@ -1141,10 +1141,10 @@ export class MathBackendWebGL implements KernelBackend {
   }
 
   realDivide(a: Tensor, b: Tensor): Tensor {
-    const op = binaryop_gpu.DIV;
+    const op = binaryop_packed_gpu.DIV;
     const outputDtype = 'float32';
-    const program = new BinaryOpProgram(op, a.shape, b.shape);
-    const output = this.makeOutputArray(program.outputShape, outputDtype);
+    const program = new BinaryOpPackedProgram(op, a.shape, b.shape);
+    const output = this.makeOutputArray(program.outputShape, outputDtype, true);
     return this.compileAndRun<Tensor>(program, [a, b], output);
   }
 
