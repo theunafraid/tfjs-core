@@ -1228,10 +1228,10 @@ export class MathBackendWebGL implements KernelBackend {
       return this.cpuBackend.subtract(a, b);
     }
 
-    const program = new BinaryOpProgram(binaryop_gpu.SUB, a.shape, b.shape);
+    const program = new BinaryOpPackedProgram(binaryop_packed_gpu.SUB, a.shape, b.shape);
     const output =
         this.makeOutputArray(
-            program.outputShape, upcastType(a.dtype, b.dtype)) as Tensor;
+            program.outputShape, upcastType(a.dtype, b.dtype), true) as Tensor;
     return this.compileAndRun<Tensor>(program, [a, b], output);
   }
 
