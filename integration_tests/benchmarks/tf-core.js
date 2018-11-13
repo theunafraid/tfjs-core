@@ -4947,18 +4947,22 @@
             var rank = this.outputShape.length;
             var dtype = getCoordsDataType(rank);
             var sourceCoordsA = getSourceCoords(aShape.length);
+            var aSample = 'vec4 a = aSample;';
+            if (aShape.length < rank) {
+                sourceCoordsA = dims.slice(0, rank).slice(-aShape.length).join(',');
+                if (aShape.length < 2) {
+                    aSample = "\n          vec4 a = vec4(aSample.xy, aSample.xy);\n        ";
+                }
+            }
             var sourceCoordsB = getSourceCoords(bShape.length);
-            if (bShape.length !== rank) {
-                sourceCoordsB = dims[rank - 1];
+            var bSample = 'vec4 b = bSample;';
+            if (bShape.length < rank) {
+                sourceCoordsB = dims.slice(0, rank).slice(-bShape.length).join(',');
+                if (bShape.length < 2) {
+                    bSample = "\n          vec4 b = vec4(bSample.xy, bSample.xy);\n        ";
+                }
             }
-            var bSample = '';
-            if (bShape.length !== rank) {
-                bSample = "\n        vec4 bSample = getB(" + sourceCoordsB + ");\n        vec4 b = vec4(bSample.xy, bSample.xy);\n      ";
-            }
-            else {
-                bSample = "\n        vec4 b = getB(" + sourceCoordsB + ");\n      ";
-            }
-            this.userCode = "\n      uniform float NAN;\n      vec4 binaryOperation(vec4 a, vec4 b) {\n        " + op + "\n      }\n\n      void main() {\n        " + dtype + " rc = getOutputCoords();\n        vec4 a = getA(" + sourceCoordsA + ");\n        " + bSample + "\n        setOutput(binaryOperation(a, b));\n      }\n    ";
+            this.userCode = "\n      uniform float NAN;\n      vec4 binaryOperation(vec4 a, vec4 b) {\n        " + op + "\n      }\n\n      void main() {\n        " + dtype + " rc = getOutputCoords();\n\n        vec4 aSample = getA(" + sourceCoordsA + ");\n        " + aSample + "\n\n        vec4 bSample = getB(" + sourceCoordsB + ");\n        " + bSample + "\n\n        setOutput(binaryOperation(a, b));\n      }\n    ";
         }
         BinaryOpPackedProgram.prototype.getCustomSetupFunc = function () {
             var _this = this;

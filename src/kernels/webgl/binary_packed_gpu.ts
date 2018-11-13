@@ -40,23 +40,28 @@ export class BinaryOpPackedProgram implements GPGPUProgram {
     const rank = this.outputShape.length;
 
     const dtype = getCoordsDataType(rank);
-    const sourceCoordsA = getSourceCoords(aShape.length);
-    let sourceCoordsB = getSourceCoords(bShape.length);
-    if(bShape.length !== rank) {
-      sourceCoordsB = dims[rank - 1];
+    let sourceCoordsA = getSourceCoords(aShape.length);
+    let aSample = 'vec4 a = aSample;';
+    if(aShape.length < rank) {
+      sourceCoordsA = dims.slice(0, rank).slice(-aShape.length).join(',');
+
+      if(aShape.length < 2) {
+        aSample = `
+          vec4 a = vec4(aSample.xy, aSample.xy);
+        `;
+      }
     }
 
-    let bSample = '';
+    let sourceCoordsB = getSourceCoords(bShape.length);
+    let bSample = 'vec4 b = bSample;';
+    if(bShape.length < rank) { // this means b's rank is smaller
+      sourceCoordsB = dims.slice(0, rank).slice(-bShape.length).join(',');
 
-    if(bShape.length !== rank) {
-      bSample = `
-        vec4 bSample = getB(${sourceCoordsB});
-        vec4 b = vec4(bSample.xy, bSample.xy);
-      `;
-    } else {
-      bSample = `
-        vec4 b = getB(${sourceCoordsB});
-      `;
+      if(bShape.length < 2) {
+        bSample = `
+          vec4 b = vec4(bSample.xy, bSample.xy);
+        `;
+      }
     }
 
     this.userCode = `
@@ -67,8 +72,13 @@ export class BinaryOpPackedProgram implements GPGPUProgram {
 
       void main() {
         ${dtype} rc = getOutputCoords();
-        vec4 a = getA(${sourceCoordsA});
+
+        vec4 aSample = getA(${sourceCoordsA});
+        ${aSample}
+
+        vec4 bSample = getB(${sourceCoordsB});
         ${bSample}
+
         setOutput(binaryOperation(a, b));
       }
     `;
