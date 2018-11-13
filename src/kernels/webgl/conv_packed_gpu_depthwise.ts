@@ -39,6 +39,54 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     const filterWidth = convInfo.filterWidth;
     const channelMul = convInfo.outChannels / convInfo.inChannels;
 
+    let mainLoop = ``;
+    for(let i=0; i<4; i++) {
+      let coords = `coords = tlCoords;`;
+      if(i % 2 === 1) {
+        coords += `coords.w += 1;`;
+      }
+      if(i > 1) {
+        coords += `coords.z += 1;`;
+      }
+
+      mainLoop += `
+        ${coords}
+        ${i > 0 ? `if(coords.z < ${this.outputShape[2]} && coords.w < ${this.outputShape[3]}) {` : ''}
+          ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;
+          int d2 = coords.w;
+          int d1 = d2 / ${channelMul};
+          int q = d2 - d1 * ${channelMul};
+
+          int xRCorner = xRCCorner.x;
+          int xCCorner = xRCCorner.y;
+
+          float dotProd = 0.0;
+          for(int wR = 0; wR < ${filterHeight}; wR++) {
+            int xR = xRCorner + wR * ${dilationHeight};
+
+            if(xR < 0 || xR >= ${xNumRows}) {
+              continue;
+            }
+
+            for(int wC = 0; wC < ${filterWidth}; wC++) {
+              int xC = xCCorner + wC * ${dilationWidth};
+
+              if(xC < 0 || xC >= ${xNumCols}) {
+                continue;
+              }
+
+              float xVal = getChannel(getX(batch, xR, xC, d1), vec2(xC, d1));
+              float wVal = getChannel(getW(wR, wC, d1, q), vec2(d1, q));
+
+              dotProd += xVal * wVal;
+            }
+          }
+
+          result[${i}] = dotProd;
+        ${i > 0 ? '}' : ''}
+      `;
+    }
+
     this.userCode = `
       const ivec2 strides = ivec2(${strideHeight}, ${strideWidth});
       const ivec2 pads = ivec2(${padTop}, ${padLeft});
@@ -48,49 +96,9 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
         ivec4 tlCoords = getOutputCoords();
         int batch = tlCoords.x;
 
-        for(int row=0; row<=1; row++) {
-          for(int col=0; col<=1; col++) {
-            ivec4 coords = tlCoords;
-            coords.z += row;
-            coords.w += col;
+        ivec4 coords;
 
-            if(coords.z >= ${this.outputShape[2]} || coords.w >= ${this.outputShape[3]}) {
-              continue;
-            }
-
-            ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;
-            int d2 = coords.w;
-            int d1 = d2 / ${channelMul};
-            int q = d2 - d1 * ${channelMul};
-
-            int xRCorner = xRCCorner.x;
-            int xCCorner = xRCCorner.y;
-
-            float dotProd = 0.0;
-            for(int wR = 0; wR < ${filterHeight}; wR++) {
-              int xR = xRCorner + wR * ${dilationHeight};
-
-              if(xR < 0 || xR >= ${xNumRows}) {
-                continue;
-              }
-
-              for(int wC = 0; wC < ${filterWidth}; wC++) {
-                int xC = xCCorner + wC * ${dilationWidth};
-
-                if(xC < 0 || xC >= ${xNumCols}) {
-                  continue;
-                }
-
-                float xVal = getChannel(getX(batch, xR, xC, d1), vec2(xC, d1));
-                float wVal = getChannel(getW(wR, wC, d1, q), vec2(d1, q));
-
-                dotProd += xVal * wVal;
-              }
-            }
-
-            result[row * 2 + col] = dotProd;
-          }
-        }
+        ${mainLoop}
 
         setOutput(result);
       }
