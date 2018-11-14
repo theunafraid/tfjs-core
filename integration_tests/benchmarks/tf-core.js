@@ -5166,80 +5166,22 @@
                     var wR = Math.floor(j / filterWidth);
                     var wC = j % filterWidth;
                     if (channelMul === 1) {
-                        if ((wC * dilationWidth) % 2 === 0) {
-                            if (padLeft % 2 === 0) {
-                                if (i <= 1 || (strideWidth % 2 === 0)) {
-                                    if (i % 2 === 0) {
-                                        getX = "getX(batch, xR, xC, d1).r";
-                                    }
-                                    else {
-                                        getX = "getX(batch, xR, xC, d1).g";
-                                    }
-                                }
-                                else {
-                                    if (i % 2 === 0) {
-                                        getX = "getX(batch, xR, xC, d1).b";
-                                    }
-                                    else {
-                                        getX = "getX(batch, xR, xC, d1).a";
-                                    }
-                                }
+                        var xC = (Math.floor(i / 2) * strideWidth - padLeft) + wC * dilationWidth;
+                        var d1 = i;
+                        if (xC % 2 === 0) {
+                            if (d1 % 2 === 0) {
+                                getX = "getX(batch, xR, xC, d1).r";
                             }
                             else {
-                                if (i <= 1 || (strideWidth % 2 === 0)) {
-                                    if (i % 2 === 0) {
-                                        getX = "getX(batch, xR, xC, d1).b";
-                                    }
-                                    else {
-                                        getX = "getX(batch, xR, xC, d1).a";
-                                    }
-                                }
-                                else {
-                                    if (i % 2 === 0) {
-                                        getX = "getX(batch, xR, xC, d1).r";
-                                    }
-                                    else {
-                                        getX = "getX(batch, xR, xC, d1).g";
-                                    }
-                                }
+                                getX = "getX(batch, xR, xC, d1).g";
                             }
                         }
                         else {
-                            if (padLeft % 2 === 0) {
-                                if (i <= 1 || (strideWidth % 2 === 0)) {
-                                    if (i % 2 === 0) {
-                                        getX = "getX(batch, xR, xC, d1).b";
-                                    }
-                                    else {
-                                        getX = "getX(batch, xR, xC, d1).a";
-                                    }
-                                }
-                                else {
-                                    if (i % 2 === 0) {
-                                        getX = "getX(batch, xR, xC, d1).r";
-                                    }
-                                    else {
-                                        getX = "getX(batch, xR, xC, d1).g";
-                                    }
-                                }
+                            if (d1 % 2 === 0) {
+                                getX = "getX(batch, xR, xC, d1).b";
                             }
                             else {
-                                if (i <= 1 || (strideWidth % 2 === 0)) {
-                                    if (i % 2 === 0) {
-                                        getX = "getX(batch, xR, xC, d1).r";
-                                    }
-                                    else {
-                                        getX = "getX(batch, xR, xC, d1).g";
-                                    }
-                                }
-                                else {
-                                    if (i % 2 === 0) {
-                                        getX = "getX(batch, xR, xC, d1).b";
-                                    }
-                                    else {
-                                        getX = "getX(batch, xR, xC, d1).a";
-                                    }
-                                }
+                                getX = "getX(batch, xR, xC, d1).a";
                             }
                         }
                     }

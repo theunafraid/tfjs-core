@@ -67,81 +67,20 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
         let wC = j % filterWidth;
 
         if(channelMul === 1) {
-          if((wC * dilationWidth) % 2 === 0) { // wC * dilationWidth is even
-            if(padLeft % 2 === 0) {
-              if(i <= 1 || (strideWidth % 2 === 0)) { // coords.z * strides is even
-                // xCCorner is even
-                // xC is even
-                if(i % 2 === 0) {
-                  getX = `getX(batch, xR, xC, d1).r`;
-                } else {
-                  getX = `getX(batch, xR, xC, d1).g`;
-                }
-              } else { // coords.z * strides is odd
-                // xCCorner is odd
-                // xC is odd
-                if(i % 2 === 0) {
-                  getX = `getX(batch, xR, xC, d1).b`;
-                } else {
-                  getX = `getX(batch, xR, xC, d1).a`;
-                }
-              }
+          var xC = (Math.floor(i / 2) * strideWidth - padLeft) + wC * dilationWidth;
+          var d1 = i;
+
+          if(xC % 2 === 0) {
+            if(d1 % 2 === 0) {
+              getX = `getX(batch, xR, xC, d1).r`;
             } else {
-              if(i <= 1 || (strideWidth % 2 === 0)) { // coords.z * strides is even
-                // xCCorner is odd
-                // xC is odd
-                if(i % 2 === 0) {
-                  getX = `getX(batch, xR, xC, d1).b`;
-                } else {
-                  getX = `getX(batch, xR, xC, d1).a`;
-                }
-              } else { // coords.z * strides is odd
-                // xCCorner is even
-                // xC is even
-                if(i % 2 === 0) {
-                  getX = `getX(batch, xR, xC, d1).r`;
-                } else {
-                  getX = `getX(batch, xR, xC, d1).g`;
-                }
-              }
+              getX = `getX(batch, xR, xC, d1).g`;
             }
-          } else { // wC * dilationWidth is odd
-            if(padLeft % 2 === 0) {
-              if(i <= 1 || (strideWidth % 2 === 0)) { // coords.z * strides is even
-                // xCCorner is even
-                // xC is odd
-                if(i % 2 === 0) {
-                  getX = `getX(batch, xR, xC, d1).b`;
-                } else {
-                  getX = `getX(batch, xR, xC, d1).a`;
-                }
-              } else { // coords.z * strides is odd
-                // xCCorner is odd
-                // xC is even
-                if(i % 2 === 0) {
-                  getX = `getX(batch, xR, xC, d1).r`;
-                } else {
-                  getX = `getX(batch, xR, xC, d1).g`;
-                }
-              }
+          } else {
+            if(d1 % 2 === 0) {
+              getX = `getX(batch, xR, xC, d1).b`;
             } else {
-              if(i <= 1 || (strideWidth % 2 === 0)) { // coords.z * strides is even
-                // xCCorner is odd
-                // xC is even
-                if(i % 2 === 0) {
-                  getX = `getX(batch, xR, xC, d1).r`;
-                } else {
-                  getX = `getX(batch, xR, xC, d1).g`;
-                }
-              } else { // coords.z * strides is odd
-                // xCCorner is even
-                // xC is odd
-                if(i % 2 === 0) {
-                  getX = `getX(batch, xR, xC, d1).b`;
-                } else {
-                  getX = `getX(batch, xR, xC, d1).a`;
-                }
-              }
+              getX = `getX(batch, xR, xC, d1).a`;
             }
           }
         }
