@@ -5165,6 +5165,84 @@
                 for (var j = 0; j < filterHeight * filterWidth; j++) {
                     var wR = Math.floor(j / filterWidth);
                     var wC = j % filterWidth;
+                    if (channelMul === 1) {
+                        if ((wC * dilationWidth) % 2 === 0) {
+                            if (padLeft % 2 === 0) {
+                                if (i <= 1 || (strideWidth % 2 === 0)) {
+                                    if (i % 2 === 0) {
+                                        getX = "getX(batch, xR, xC, d1).r";
+                                    }
+                                    else {
+                                        getX = "getX(batch, xR, xC, d1).g";
+                                    }
+                                }
+                                else {
+                                    if (i % 2 === 0) {
+                                        getX = "getX(batch, xR, xC, d1).b";
+                                    }
+                                    else {
+                                        getX = "getX(batch, xR, xC, d1).a";
+                                    }
+                                }
+                            }
+                            else {
+                                if (i <= 1 || (strideWidth % 2 === 0)) {
+                                    if (i % 2 === 0) {
+                                        getX = "getX(batch, xR, xC, d1).b";
+                                    }
+                                    else {
+                                        getX = "getX(batch, xR, xC, d1).a";
+                                    }
+                                }
+                                else {
+                                    if (i % 2 === 0) {
+                                        getX = "getX(batch, xR, xC, d1).r";
+                                    }
+                                    else {
+                                        getX = "getX(batch, xR, xC, d1).g";
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            if (padLeft % 2 === 0) {
+                                if (i <= 1 || (strideWidth % 2 === 0)) {
+                                    if (i % 2 === 0) {
+                                        getX = "getX(batch, xR, xC, d1).b";
+                                    }
+                                    else {
+                                        getX = "getX(batch, xR, xC, d1).a";
+                                    }
+                                }
+                                else {
+                                    if (i % 2 === 0) {
+                                        getX = "getX(batch, xR, xC, d1).r";
+                                    }
+                                    else {
+                                        getX = "getX(batch, xR, xC, d1).g";
+                                    }
+                                }
+                            }
+                            else {
+                                if (i <= 1 || (strideWidth % 2 === 0)) {
+                                    if (i % 2 === 0) {
+                                        getX = "getX(batch, xR, xC, d1).r";
+                                    }
+                                    else {
+                                        getX = "getX(batch, xR, xC, d1).g";
+                                    }
+                                }
+                                else {
+                                    if (i % 2 === 0) {
+                                        getX = "getX(batch, xR, xC, d1).b";
+                                    }
+                                    else {
+                                        getX = "getX(batch, xR, xC, d1).a";
+                                    }
+                                }
+                            }
+                        }
+                    }
                     innerLoop += "\n          wR = " + wR + ";\n          wC = " + wC + ";\n\n          xR = xRCorner + wR * " + dilationHeight + ";\n\n          if(xR >= 0 && xR < " + xNumRows + ") {\n            xC = xCCorner + wC * " + dilationWidth + ";\n\n            if(xC >= 0 && xC < " + xNumCols + ") {\n              float xVal = " + getX + ";\n              float wVal = " + getW + ";\n\n              dotProd += xVal * wVal;\n            }\n          }\n        ";
                 }
                 mainLoop += "\n        " + coords + "\n        " + (i > 0 ? "if(coords.z < " + this.outputShape[2] + " && coords.w < " + this.outputShape[3] + ") {" : '') + "\n          ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;\n          int d2 = coords.w;\n          int d1 = d2 / " + channelMul + ";\n          int q = d2 - d1 * " + channelMul + ";\n\n          int xRCorner = xRCCorner.x;\n          int xCCorner = xRCCorner.y;\n\n          float dotProd = 0.0;\n          int wR;\n          int wC;\n          int xR;\n          int xC;\n\n          " + innerLoop + "\n\n          result[" + i + "] = dotProd;\n        " + (i > 0 ? '}' : '') + "\n      ";
