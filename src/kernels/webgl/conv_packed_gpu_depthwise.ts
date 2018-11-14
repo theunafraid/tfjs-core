@@ -45,7 +45,7 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
       let getX = `getChannel(getX(batch, xR, xC, d1), vec2(xC, d1))`;
       let getW = `getChannel(getW(wR, wC, d1, q), vec2(d1, q))`;
 
-      if(channelMul === 1) {
+      if(channelMul === 1) { // q is always even
         if(i % 2 === 0) {
           getW = `getW(wR, wC, d1, q).x`;
         } else {
@@ -62,7 +62,57 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
 
       let innerLoop = ``;
 
-      for(let j=0; j<filterHeight * filterWidth; j++) {
+      let vec4Count = Math.floor(filterHeight * filterWidth / 4);
+
+      for(let v=0; v<vec4Count; v++) {
+        let index = v * 4;
+        innerLoop += `vec4 xVec4${v}; vec4 wVec4${v};`;
+
+        for(let j=index; j<index + 4; j++) {
+          let wR = Math.floor(j / filterWidth);
+          let wC = j % filterWidth;
+
+          if(channelMul === 1) {
+            var xC = (Math.floor(i / 2) * strideWidth - padLeft) + wC * dilationWidth;
+            var d1 = i;
+
+            if(xC % 2 === 0) {
+              if(d1 % 2 === 0) {
+                getX = `getX(batch, xR, xC, d1).r`;
+              } else {
+                getX = `getX(batch, xR, xC, d1).g`;
+              }
+            } else {
+              if(d1 % 2 === 0) {
+                getX = `getX(batch, xR, xC, d1).b`;
+              } else {
+                getX = `getX(batch, xR, xC, d1).a`;
+              }
+            }
+          }
+
+          innerLoop += `
+            wR = ${wR};
+            wC = ${wC};
+
+            xR = xRCorner + wR * ${dilationHeight};
+
+            if(xR >= 0 && xR < ${xNumRows}) {
+              xC = xCCorner + wC * ${dilationWidth};
+
+              if(xC >= 0 && xC < ${xNumCols}) {
+                xVec4${v}[${j % 4}] = ${getX};
+                wVec4${v}[${j % 4}] = ${getW};
+              }
+            }
+          `;
+        }
+
+        innerLoop += `dotProd += dot(xVec4${v}, wVec4${v});`;
+      }
+
+      const leftoverIndex = vec4Count * 4;
+      for(let j=leftoverIndex; j<filterHeight * filterWidth; j++) {
         let wR = Math.floor(j / filterWidth);
         let wC = j % filterWidth;
 

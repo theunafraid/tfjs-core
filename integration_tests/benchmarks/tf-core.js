@@ -5162,7 +5162,39 @@
                     coords += "coords.z += 1;";
                 }
                 var innerLoop = "";
-                for (var j = 0; j < filterHeight * filterWidth; j++) {
+                var vec4Count = Math.floor(filterHeight * filterWidth / 4);
+                for (var v = 0; v < vec4Count; v++) {
+                    var index = v * 4;
+                    innerLoop += "vec4 xVec4" + v + "; vec4 wVec4" + v + ";";
+                    for (var j = index; j < index + 4; j++) {
+                        var wR = Math.floor(j / filterWidth);
+                        var wC = j % filterWidth;
+                        if (channelMul === 1) {
+                            var xC = (Math.floor(i / 2) * strideWidth - padLeft) + wC * dilationWidth;
+                            var d1 = i;
+                            if (xC % 2 === 0) {
+                                if (d1 % 2 === 0) {
+                                    getX = "getX(batch, xR, xC, d1).r";
+                                }
+                                else {
+                                    getX = "getX(batch, xR, xC, d1).g";
+                                }
+                            }
+                            else {
+                                if (d1 % 2 === 0) {
+                                    getX = "getX(batch, xR, xC, d1).b";
+                                }
+                                else {
+                                    getX = "getX(batch, xR, xC, d1).a";
+                                }
+                            }
+                        }
+                        innerLoop += "\n            wR = " + wR + ";\n            wC = " + wC + ";\n\n            xR = xRCorner + wR * " + dilationHeight + ";\n\n            if(xR >= 0 && xR < " + xNumRows + ") {\n              xC = xCCorner + wC * " + dilationWidth + ";\n\n              if(xC >= 0 && xC < " + xNumCols + ") {\n                xVec4" + v + "[" + j % 4 + "] = " + getX + ";\n                wVec4" + v + "[" + j % 4 + "] = " + getW + ";\n              }\n            }\n          ";
+                    }
+                    innerLoop += "dotProd += dot(xVec4" + v + ", wVec4" + v + ");";
+                }
+                var leftoverIndex = vec4Count * 4;
+                for (var j = leftoverIndex; j < filterHeight * filterWidth; j++) {
                     var wR = Math.floor(j / filterWidth);
                     var wC = j % filterWidth;
                     if (channelMul === 1) {
