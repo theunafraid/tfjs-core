@@ -42,6 +42,16 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     let mainLoop = ``;
     for(let i=0; i<4; i++) {
       let coords = `coords = tlCoords;`;
+      let getW = `getChannel(getW(wR, wC, d1, q), vec2(d1, q))`;
+
+      if(channelMul === 1) {
+        if(i % 2 === 0) {
+          getW = `getW(wR, wC, d1, q).x`;
+        } else {
+          getW = `getW(wR, wC, d1, q).z`;
+        }
+      }
+
       if(i % 2 === 1) {
         coords += `coords.w += 1;`;
       }
@@ -76,7 +86,7 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
               }
 
               float xVal = getChannel(getX(batch, xR, xC, d1), vec2(xC, d1));
-              float wVal = getChannel(getW(wR, wC, d1, q), vec2(d1, q));
+              float wVal = ${getW};
 
               dotProd += xVal * wVal;
             }
