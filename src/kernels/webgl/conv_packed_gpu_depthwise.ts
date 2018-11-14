@@ -42,6 +42,7 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     let mainLoop = ``;
     for(let i=0; i<4; i++) {
       let coords = `coords = tlCoords;`;
+      let getX = `getChannel(getX(batch, xR, xC, d1), vec2(xC, d1))`;
       let getW = `getChannel(getW(wR, wC, d1, q), vec2(d1, q))`;
 
       if(channelMul === 1) {
@@ -59,6 +60,31 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
         coords += `coords.z += 1;`;
       }
 
+      let innerLoop = ``;
+
+      for(let j=0; j<filterHeight * filterWidth; j++) {
+        let wR = Math.floor(j / filterWidth);
+        let wC = j % filterWidth;
+
+        innerLoop += `
+          wR = ${wR};
+          wC = ${wC};
+
+          xR = xRCorner + wR * ${dilationHeight};
+
+          if(xR >= 0 && xR < ${xNumRows}) {
+            xC = xCCorner + wC * ${dilationWidth};
+
+            if(xC >= 0 && xC < ${xNumCols}) {
+              float xVal = ${getX};
+              float wVal = ${getW};
+
+              dotProd += xVal * wVal;
+            }
+          }
+        `;
+      }
+
       mainLoop += `
         ${coords}
         ${i > 0 ? `if(coords.z < ${this.outputShape[2]} && coords.w < ${this.outputShape[3]}) {` : ''}
@@ -71,26 +97,12 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
           int xCCorner = xRCCorner.y;
 
           float dotProd = 0.0;
-          for(int wR = 0; wR < ${filterHeight}; wR++) {
-            int xR = xRCorner + wR * ${dilationHeight};
+          int wR;
+          int wC;
+          int xR;
+          int xC;
 
-            if(xR < 0 || xR >= ${xNumRows}) {
-              continue;
-            }
-
-            for(int wC = 0; wC < ${filterWidth}; wC++) {
-              int xC = xCCorner + wC * ${dilationWidth};
-
-              if(xC < 0 || xC >= ${xNumCols}) {
-                continue;
-              }
-
-              float xVal = getChannel(getX(batch, xR, xC, d1), vec2(xC, d1));
-              float wVal = ${getW};
-
-              dotProd += xVal * wVal;
-            }
-          }
+          ${innerLoop}
 
           result[${i}] = dotProd;
         ${i > 0 ? '}' : ''}

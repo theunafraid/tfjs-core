@@ -5145,13 +5145,29 @@
             var mainLoop = "";
             for (var i = 0; i < 4; i++) {
                 var coords = "coords = tlCoords;";
+                var getX = "getChannel(getX(batch, xR, xC, d1), vec2(xC, d1))";
+                var getW = "getChannel(getW(wR, wC, d1, q), vec2(d1, q))";
+                if (channelMul === 1) {
+                    if (i % 2 === 0) {
+                        getW = "getW(wR, wC, d1, q).x";
+                    }
+                    else {
+                        getW = "getW(wR, wC, d1, q).z";
+                    }
+                }
                 if (i % 2 === 1) {
                     coords += "coords.w += 1;";
                 }
                 if (i > 1) {
                     coords += "coords.z += 1;";
                 }
-                mainLoop += "\n        " + coords + "\n        " + (i > 0 ? "if(coords.z < " + this.outputShape[2] + " && coords.w < " + this.outputShape[3] + ") {" : '') + "\n          ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;\n          int d2 = coords.w;\n          int d1 = d2 / " + channelMul + ";\n          int q = d2 - d1 * " + channelMul + ";\n\n          int xRCorner = xRCCorner.x;\n          int xCCorner = xRCCorner.y;\n\n          float dotProd = 0.0;\n          for(int wR = 0; wR < " + filterHeight + "; wR++) {\n            int xR = xRCorner + wR * " + dilationHeight + ";\n\n            if(xR < 0 || xR >= " + xNumRows + ") {\n              continue;\n            }\n\n            for(int wC = 0; wC < " + filterWidth + "; wC++) {\n              int xC = xCCorner + wC * " + dilationWidth + ";\n\n              if(xC < 0 || xC >= " + xNumCols + ") {\n                continue;\n              }\n\n              float xVal = getChannel(getX(batch, xR, xC, d1), vec2(xC, d1));\n              float wVal = getChannel(getW(wR, wC, d1, q), vec2(d1, q));\n\n              dotProd += xVal * wVal;\n            }\n          }\n\n          result[" + i + "] = dotProd;\n        " + (i > 0 ? '}' : '') + "\n      ";
+                var innerLoop = "";
+                for (var j = 0; j < filterHeight * filterWidth; j++) {
+                    var wR = Math.floor(j / filterWidth);
+                    var wC = j % filterWidth;
+                    innerLoop += "\n          wR = " + wR + ";\n          wC = " + wC + ";\n\n          xR = xRCorner + wR * " + dilationHeight + ";\n\n          if(xR >= 0 && xR < " + xNumRows + ") {\n            xC = xCCorner + wC * " + dilationWidth + ";\n\n            if(xC >= 0 && xC < " + xNumCols + ") {\n              float xVal = " + getX + ";\n              float wVal = " + getW + ";\n\n              dotProd += xVal * wVal;\n            }\n          }\n        ";
+                }
+                mainLoop += "\n        " + coords + "\n        " + (i > 0 ? "if(coords.z < " + this.outputShape[2] + " && coords.w < " + this.outputShape[3] + ") {" : '') + "\n          ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;\n          int d2 = coords.w;\n          int d1 = d2 / " + channelMul + ";\n          int q = d2 - d1 * " + channelMul + ";\n\n          int xRCorner = xRCCorner.x;\n          int xCCorner = xRCCorner.y;\n\n          float dotProd = 0.0;\n          int wR;\n          int wC;\n          int xR;\n          int xC;\n\n          " + innerLoop + "\n\n          result[" + i + "] = dotProd;\n        " + (i > 0 ? '}' : '') + "\n      ";
             }
             this.userCode = "\n      const ivec2 strides = ivec2(" + strideHeight + ", " + strideWidth + ");\n      const ivec2 pads = ivec2(" + padTop + ", " + padLeft + ");\n\n      void main() {\n        vec4 result = vec4(0);\n        ivec4 tlCoords = getOutputCoords();\n        int batch = tlCoords.x;\n\n        ivec4 coords;\n\n        " + mainLoop + "\n\n        setOutput(result);\n      }\n    ";
         }
