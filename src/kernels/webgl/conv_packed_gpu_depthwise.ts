@@ -27,155 +27,70 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
   constructor(convInfo: Conv2DInfo) {
     this.outputShape = convInfo.outShape;
 
-    const xNumRows = convInfo.inHeight;
-    const xNumCols = convInfo.inWidth;
+    // const xNumRows = convInfo.inHeight;
+    // const xNumCols = convInfo.inWidth;
     const padTop = convInfo.padInfo.top;
     const padLeft = convInfo.padInfo.left;
     const strideHeight = convInfo.strideHeight;
     const strideWidth = convInfo.strideWidth;
-    const dilationHeight = convInfo.dilationHeight;
-    const dilationWidth = convInfo.dilationWidth;
+    // const dilationHeight = convInfo.dilationHeight;
+    // const dilationWidth = convInfo.dilationWidth;
     const filterHeight = convInfo.filterHeight;
     const filterWidth = convInfo.filterWidth;
     const channelMul = convInfo.outChannels / convInfo.inChannels;
 
     let mainLoop = ``;
-    for(let i=0; i<4; i++) {
-      let coords = `coords = tlCoords;`;
-      let getX = `getChannel(getX(batch, xR, xC, d1), vec2(xC, d1))`;
-      let getW = `getChannel(getW(wR, wC, d1, q), vec2(d1, q))`;
 
-      if(channelMul === 1) { // q is always even
-        if(i % 2 === 0) {
-          getW = `getW(wR, wC, d1, q).x`;
-        } else {
-          getW = `getW(wR, wC, d1, q).z`;
-        }
-      }
+    let combinedPatchWidth = filterWidth + 1;
+    let texelsAcross = Math.ceil(combinedPatchWidth / 2);
 
-      if(i % 2 === 1) {
-        coords += `coords.w += 1;`;
-      }
-      if(i > 1) {
-        coords += `coords.z += 1;`;
-      }
-
-      let innerLoop = ``;
-
-      let vec4Count = Math.floor(filterHeight * filterWidth / 4);
-
-      for(let v=0; v<vec4Count; v++) {
-        let index = v * 4;
-        innerLoop += `vec4 xVec4${v}; vec4 wVec4${v};`;
-
-        for(let j=index; j<index + 4; j++) {
-          let wR = Math.floor(j / filterWidth);
-          let wC = j % filterWidth;
-
-          if(channelMul === 1) {
-            var xC = (Math.floor(i / 2) * strideWidth - padLeft) + wC * dilationWidth;
-            var d1 = i;
-
-            if(xC % 2 === 0) {
-              if(d1 % 2 === 0) {
-                getX = `getX(batch, xR, xC, d1).r`;
-              } else {
-                getX = `getX(batch, xR, xC, d1).g`;
-              }
-            } else {
-              if(d1 % 2 === 0) {
-                getX = `getX(batch, xR, xC, d1).b`;
-              } else {
-                getX = `getX(batch, xR, xC, d1).a`;
-              }
-            }
-          }
-
-          innerLoop += `
-            wR = ${wR};
-            wC = ${wC};
-
-            xR = xRCorner + wR * ${dilationHeight};
-
-            if(xR >= 0 && xR < ${xNumRows}) {
-              xC = xCCorner + wC * ${dilationWidth};
-
-              if(xC >= 0 && xC < ${xNumCols}) {
-                xVec4${v}[${j % 4}] = ${getX};
-                wVec4${v}[${j % 4}] = ${getW};
-              }
-            }
-          `;
-        }
-
-        innerLoop += `dotProd += dot(xVec4${v}, wVec4${v});`;
-      }
-
-      const leftoverIndex = vec4Count * 4;
-      for(let j=leftoverIndex; j<filterHeight * filterWidth; j++) {
-        let wR = Math.floor(j / filterWidth);
-        let wC = j % filterWidth;
-
-        if(channelMul === 1) {
-          var xC = (Math.floor(i / 2) * strideWidth - padLeft) + wC * dilationWidth;
-          var d1 = i;
-
-          if(xC % 2 === 0) {
-            if(d1 % 2 === 0) {
-              getX = `getX(batch, xR, xC, d1).r`;
-            } else {
-              getX = `getX(batch, xR, xC, d1).g`;
-            }
-          } else {
-            if(d1 % 2 === 0) {
-              getX = `getX(batch, xR, xC, d1).b`;
-            } else {
-              getX = `getX(batch, xR, xC, d1).a`;
-            }
-          }
-        }
-
-        innerLoop += `
-          wR = ${wR};
-          wC = ${wC};
-
-          xR = xRCorner + wR * ${dilationHeight};
-
-          if(xR >= 0 && xR < ${xNumRows}) {
-            xC = xCCorner + wC * ${dilationWidth};
-
-            if(xC >= 0 && xC < ${xNumCols}) {
-              float xVal = ${getX};
-              float wVal = ${getW};
-
-              dotProd += xVal * wVal;
-            }
-          }
+    for(let r=0; r<filterHeight; r++) {
+      for(let c=0; c<texelsAcross; c++) {
+        mainLoop += `
+          vec4 xTexelR${r}C${c * 2} = getX(batch, xRCorner + ${r}, xCCorner + ${c * 2}, d1);
         `;
       }
+    }
 
-      mainLoop += `
-        ${coords}
-        ${i > 0 ? `if(coords.z < ${this.outputShape[2]} && coords.w < ${this.outputShape[3]}) {` : ''}
-          ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;
-          int d2 = coords.w;
-          int d1 = d2 / ${channelMul};
-          int q = d2 - d1 * ${channelMul};
+    /*
+    for 3x3, we end up with:
+    xTexelR0C0
+    xTexelR0C2
+    xTexelR1C0
+    xTexelR1C2
+    xTexelR2C0
+    xTexelR2C2
+     */
 
-          int xRCorner = xRCCorner.x;
-          int xCCorner = xRCCorner.y;
+    for(let r=0; r<filterHeight; r++) {
+      for(let c=0; c<filterWidth; c++) {
+        mainLoop += `
+          vec4 wTexelR${r}C${c} = getW(${r}, ${c}, d1, q);
+        `;
+      }
+    }
 
-          float dotProd = 0.0;
-          int wR;
-          int wC;
-          int xR;
-          int xC;
+    mainLoop += `vec4 xTexel = vec4(0.); vec4 wTexel = vec4(0.);`;
 
-          ${innerLoop}
+    for(let r=0; r<filterHeight; r++) {
+      for(let c=0; c<filterWidth; c++) {
+        let currentXTexel = `xTexelR${r}C${c}`;
+        let xTexel = `xTexel = ${currentXTexel}`;
 
-          result[${i}] = dotProd;
-        ${i > 0 ? '}' : ''}
-      `;
+        if(c % 2 !== 0) {
+          currentXTexel = `xTexelR${r}C${c - 1}`;
+          let nextXTexel = `xTexelR${r}C${c + 1}`;
+          xTexel = `xTexel = vec4(${currentXTexel}.zw, ${nextXTexel}.xy)`;
+        }
+
+        let wTexel = `wTexel = vec4(wTexelR${r}C${c}.xy, wTexelR${r}C${c}.xy)`;
+
+        mainLoop += `
+          ${xTexel};
+          ${wTexel};
+          result += dot(xTexel, wTexel);
+        `;
+      }
     }
 
     this.userCode = `
@@ -183,11 +98,17 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
       const ivec2 pads = ivec2(${padTop}, ${padLeft});
 
       void main() {
-        vec4 result = vec4(0);
-        ivec4 tlCoords = getOutputCoords();
-        int batch = tlCoords.x;
+        ivec4 coords = getOutputCoords();
+        int batch = coords.x;
+        ivec2 xRCCorner = coords.yz * strides - pads;
+        int d2 = coords.w;
+        int d1 = d2 / ${channelMul};
+        int q = d2 - d1 * ${channelMul};
 
-        ivec4 coords;
+        int xRCorner = xRCCorner.x;
+        int xCCorner = xRCCorner.y;
+
+        vec4 result = vec4(0.);
 
         ${mainLoop}
 
@@ -196,3 +117,13 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     `;
   }
 }
+
+/*
+leftovers
+
+implement out of bounds condition
+
+AFTER MOBILENET WORKS
+
+dilation
+ */

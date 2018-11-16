@@ -5035,7 +5035,7 @@
         function ComplexAbsProgram(shape) {
             this.variableNames = ['real', 'imag'];
             this.outputShape = shape;
-            this.userCode = "\n      void main() {\n        float real = getRealAtOutCoords();\n        float imag = getImagAtOutCoords();\n        vec2 v = vec2(real, imag);\n\n        setOutput(sqrt(dot(v, v)));\n      }\n    ";
+            this.userCode = "\n      void main() {\n        float re = abs(getRealAtOutCoords());\n        float im = abs(getImagAtOutCoords());\n        float mx = max(re, im);\n\n        // sadly the length function in glsl is not underflow-safe\n        // (at least not on Intel GPUs). So the safe solution is\n        // to ensure underflow-safety in all cases.\n        setOutput(\n          mx == 0.0 ? 0.0 : mx * length(vec2(1, min(re, im)/mx))\n        );\n      }\n    ";
         }
         return ComplexAbsProgram;
     }());
@@ -5131,97 +5131,41 @@
             this.variableNames = ['x', 'W'];
             this.usesPackedTextures = true;
             this.outputShape = convInfo.outShape;
-            var xNumRows = convInfo.inHeight;
-            var xNumCols = convInfo.inWidth;
             var padTop = convInfo.padInfo.top;
             var padLeft = convInfo.padInfo.left;
             var strideHeight = convInfo.strideHeight;
             var strideWidth = convInfo.strideWidth;
-            var dilationHeight = convInfo.dilationHeight;
-            var dilationWidth = convInfo.dilationWidth;
             var filterHeight = convInfo.filterHeight;
             var filterWidth = convInfo.filterWidth;
             var channelMul = convInfo.outChannels / convInfo.inChannels;
             var mainLoop = "";
-            for (var i = 0; i < 4; i++) {
-                var coords = "coords = tlCoords;";
-                var getX = "getChannel(getX(batch, xR, xC, d1), vec2(xC, d1))";
-                var getW = "getChannel(getW(wR, wC, d1, q), vec2(d1, q))";
-                if (channelMul === 1) {
-                    if (i % 2 === 0) {
-                        getW = "getW(wR, wC, d1, q).x";
-                    }
-                    else {
-                        getW = "getW(wR, wC, d1, q).z";
-                    }
+            var combinedPatchWidth = filterWidth + 1;
+            var texelsAcross = Math.ceil(combinedPatchWidth / 2);
+            for (var r = 0; r < filterHeight; r++) {
+                for (var c = 0; c < texelsAcross; c++) {
+                    mainLoop += "\n          vec4 xTexelR" + r + "C" + c * 2 + " = getX(batch, xRCorner + " + r + ", xCCorner + " + c * 2 + ", d1);\n        ";
                 }
-                if (i % 2 === 1) {
-                    coords += "coords.w += 1;";
-                }
-                if (i > 1) {
-                    coords += "coords.z += 1;";
-                }
-                var innerLoop = "";
-                var vec4Count = Math.floor(filterHeight * filterWidth / 4);
-                for (var v = 0; v < vec4Count; v++) {
-                    var index = v * 4;
-                    innerLoop += "vec4 xVec4" + v + "; vec4 wVec4" + v + ";";
-                    for (var j = index; j < index + 4; j++) {
-                        var wR = Math.floor(j / filterWidth);
-                        var wC = j % filterWidth;
-                        if (channelMul === 1) {
-                            var xC = (Math.floor(i / 2) * strideWidth - padLeft) + wC * dilationWidth;
-                            var d1 = i;
-                            if (xC % 2 === 0) {
-                                if (d1 % 2 === 0) {
-                                    getX = "getX(batch, xR, xC, d1).r";
-                                }
-                                else {
-                                    getX = "getX(batch, xR, xC, d1).g";
-                                }
-                            }
-                            else {
-                                if (d1 % 2 === 0) {
-                                    getX = "getX(batch, xR, xC, d1).b";
-                                }
-                                else {
-                                    getX = "getX(batch, xR, xC, d1).a";
-                                }
-                            }
-                        }
-                        innerLoop += "\n            wR = " + wR + ";\n            wC = " + wC + ";\n\n            xR = xRCorner + wR * " + dilationHeight + ";\n\n            if(xR >= 0 && xR < " + xNumRows + ") {\n              xC = xCCorner + wC * " + dilationWidth + ";\n\n              if(xC >= 0 && xC < " + xNumCols + ") {\n                xVec4" + v + "[" + j % 4 + "] = " + getX + ";\n                wVec4" + v + "[" + j % 4 + "] = " + getW + ";\n              }\n            }\n          ";
-                    }
-                    innerLoop += "dotProd += dot(xVec4" + v + ", wVec4" + v + ");";
-                }
-                var leftoverIndex = vec4Count * 4;
-                for (var j = leftoverIndex; j < filterHeight * filterWidth; j++) {
-                    var wR = Math.floor(j / filterWidth);
-                    var wC = j % filterWidth;
-                    if (channelMul === 1) {
-                        var xC = (Math.floor(i / 2) * strideWidth - padLeft) + wC * dilationWidth;
-                        var d1 = i;
-                        if (xC % 2 === 0) {
-                            if (d1 % 2 === 0) {
-                                getX = "getX(batch, xR, xC, d1).r";
-                            }
-                            else {
-                                getX = "getX(batch, xR, xC, d1).g";
-                            }
-                        }
-                        else {
-                            if (d1 % 2 === 0) {
-                                getX = "getX(batch, xR, xC, d1).b";
-                            }
-                            else {
-                                getX = "getX(batch, xR, xC, d1).a";
-                            }
-                        }
-                    }
-                    innerLoop += "\n          wR = " + wR + ";\n          wC = " + wC + ";\n\n          xR = xRCorner + wR * " + dilationHeight + ";\n\n          if(xR >= 0 && xR < " + xNumRows + ") {\n            xC = xCCorner + wC * " + dilationWidth + ";\n\n            if(xC >= 0 && xC < " + xNumCols + ") {\n              float xVal = " + getX + ";\n              float wVal = " + getW + ";\n\n              dotProd += xVal * wVal;\n            }\n          }\n        ";
-                }
-                mainLoop += "\n        " + coords + "\n        " + (i > 0 ? "if(coords.z < " + this.outputShape[2] + " && coords.w < " + this.outputShape[3] + ") {" : '') + "\n          ivec2 xRCCorner = ivec2(coords.y, coords.z) * strides - pads;\n          int d2 = coords.w;\n          int d1 = d2 / " + channelMul + ";\n          int q = d2 - d1 * " + channelMul + ";\n\n          int xRCorner = xRCCorner.x;\n          int xCCorner = xRCCorner.y;\n\n          float dotProd = 0.0;\n          int wR;\n          int wC;\n          int xR;\n          int xC;\n\n          " + innerLoop + "\n\n          result[" + i + "] = dotProd;\n        " + (i > 0 ? '}' : '') + "\n      ";
             }
-            this.userCode = "\n      const ivec2 strides = ivec2(" + strideHeight + ", " + strideWidth + ");\n      const ivec2 pads = ivec2(" + padTop + ", " + padLeft + ");\n\n      void main() {\n        vec4 result = vec4(0);\n        ivec4 tlCoords = getOutputCoords();\n        int batch = tlCoords.x;\n\n        ivec4 coords;\n\n        " + mainLoop + "\n\n        setOutput(result);\n      }\n    ";
+            for (var r = 0; r < filterHeight; r++) {
+                for (var c = 0; c < filterWidth; c++) {
+                    mainLoop += "\n          vec4 wTexelR" + r + "C" + c + " = getW(" + r + ", " + c + ", d1, q);\n        ";
+                }
+            }
+            mainLoop += "vec4 xTexel = vec4(0.); vec4 wTexel = vec4(0.);";
+            for (var r = 0; r < filterHeight; r++) {
+                for (var c = 0; c < filterWidth; c++) {
+                    var currentXTexel = "xTexelR" + r + "C" + c;
+                    var xTexel = "xTexel = " + currentXTexel;
+                    if (c % 2 !== 0) {
+                        currentXTexel = "xTexelR" + r + "C" + (c - 1);
+                        var nextXTexel = "xTexelR" + r + "C" + (c + 1);
+                        xTexel = "xTexel = vec4(" + currentXTexel + ".zw, " + nextXTexel + ".xy)";
+                    }
+                    var wTexel = "wTexel = vec4(wTexelR" + r + "C" + c + ".xy, wTexelR" + r + "C" + c + ".xy)";
+                    mainLoop += "\n          " + xTexel + ";\n          " + wTexel + ";\n          result += dot(xTexel, wTexel);\n        ";
+                }
+            }
+            this.userCode = "\n      const ivec2 strides = ivec2(" + strideHeight + ", " + strideWidth + ");\n      const ivec2 pads = ivec2(" + padTop + ", " + padLeft + ");\n\n      void main() {\n        ivec4 coords = getOutputCoords();\n        int batch = coords.x;\n        ivec2 xRCCorner = coords.yz * strides - pads;\n        int d2 = coords.w;\n        int d1 = d2 / " + channelMul + ";\n        int q = d2 - d1 * " + channelMul + ";\n\n        int xRCorner = xRCCorner.x;\n        int xCCorner = xRCCorner.y;\n\n        vec4 result = vec4(0.);\n\n        " + mainLoop + "\n\n        setOutput(result);\n      }\n    ";
         }
         return DepthwiseConv2DPackedProgram;
     }());
@@ -9634,13 +9578,19 @@
         MathBackendWebGL.prototype.batchMatMul = function (a, b, transposeA, transposeB) {
             var outerShapeA = transposeA ? a.shape[2] : a.shape[1];
             var outerShapeB = transposeB ? b.shape[1] : b.shape[2];
-            var _a = a.shape, batch = _a[0], firstDim = _a[1], sharedDim = _a[2];
-            var _b = b.shape, secondDim = _b[2];
-            if ((firstDim === 1 || secondDim === 1) &&
+            var sharedDim = transposeA ? a.shape[1] : a.shape[2];
+            var _a = a.shape, batch = _a[0];
+            if ((outerShapeA === 1 || outerShapeB === 1) &&
                 sharedDim > MATMUL_SHARED_DIM_THRESHOLD) {
-                var a3D = secondDim === 1 ? a : a.as3D(batch, sharedDim, 1);
-                var axis = secondDim === 1 ? 2 : 1;
-                var b3D = secondDim === 1 ? b.as3D(batch, 1, sharedDim) : b;
+                if (transposeA) {
+                    a = a.transpose([0, 2, 1]);
+                }
+                if (transposeB) {
+                    b = b.transpose([0, 2, 1]);
+                }
+                var a3D = outerShapeB === 1 ? a : a.as3D(batch, sharedDim, 1);
+                var axis = outerShapeB === 1 ? 2 : 1;
+                var b3D = outerShapeB === 1 ? b.as3D(batch, 1, sharedDim) : b;
                 return this.multiply(a3D, b3D).sum(axis, true);
             }
             if (batch === 1) {
@@ -14775,7 +14725,7 @@
             for (var i = 0; i < x.size; ++i) {
                 var real$$1 = values[i * 2];
                 var imag$$1 = values[i * 2 + 1];
-                resultValues[i] = Math.sqrt(real$$1 * real$$1 + imag$$1 * imag$$1);
+                resultValues[i] = Math.hypot(real$$1, imag$$1);
             }
             return Tensor.make(x.shape, { values: resultValues });
         };
@@ -17201,19 +17151,15 @@
                                             }
                                         };
                                         weightFileReader.onerror = function (error) {
-                                            reject("Failed to weights data from file of path '" + path + "'.");
-                                            return;
+                                            return reject("Failed to weights data from file of path '" + path + "'.");
                                         };
                                         weightFileReader.readAsArrayBuffer(pathToFile[path]);
                                     });
                                 });
                             };
-                            jsonReader.onerror = function (error) {
-                                reject("Failed to read model topology and weights manifest JSON " +
-                                    ("from file '" + jsonFile.name + "'. BrowserFiles supports loading ") +
-                                    "Keras-style tf.Model artifacts only.");
-                                return;
-                            };
+                            jsonReader.onerror = function (error) { return reject("Failed to read model topology and weights manifest JSON " +
+                                ("from file '" + jsonFile.name + "'. BrowserFiles supports loading ") +
+                                "Keras-style tf.Model artifacts only."); };
                             jsonReader.readAsText(jsonFile);
                         })];
                 });
@@ -17547,18 +17493,13 @@
         };
         BrowserHTTPRequest.prototype.loadWeights = function (weightsManifest) {
             return __awaiter(this, void 0, void 0, function () {
-                var pathPrefix, weightPath, weightSpecs, _i, weightsManifest_2, entry, fetchURLs, _a, _b;
-                return __generator(this, function (_c) {
-                    switch (_c.label) {
+                var weightPath, _a, prefix, suffix, pathPrefix, weightSpecs, _i, weightsManifest_2, entry, fetchURLs, _b, _c;
+                return __generator(this, function (_d) {
+                    switch (_d.label) {
                         case 0:
-                            pathPrefix = this.weightPathPrefix;
-                            if (pathPrefix == null) {
-                                weightPath = Array.isArray(this.path) ? this.path[1] : this.path;
-                                pathPrefix = weightPath.substring(0, weightPath.lastIndexOf('/'));
-                                if (!pathPrefix.endsWith('/')) {
-                                    pathPrefix = pathPrefix + '/';
-                                }
-                            }
+                            weightPath = Array.isArray(this.path) ? this.path[1] : this.path;
+                            _a = parseUrl(weightPath), prefix = _a[0], suffix = _a[1];
+                            pathPrefix = this.weightPathPrefix || prefix;
                             weightSpecs = [];
                             for (_i = 0, weightsManifest_2 = weightsManifest; _i < weightsManifest_2.length; _i++) {
                                 entry = weightsManifest_2[_i];
@@ -17567,14 +17508,14 @@
                             fetchURLs = [];
                             weightsManifest.forEach(function (weightsGroup) {
                                 weightsGroup.paths.forEach(function (path) {
-                                    fetchURLs.push(pathPrefix + path);
+                                    fetchURLs.push(pathPrefix + path + suffix);
                                 });
                             });
-                            _a = [weightSpecs];
-                            _b = concatenateArrayBuffers;
+                            _b = [weightSpecs];
+                            _c = concatenateArrayBuffers;
                             return [4, loadWeightsAsArrayBuffer(fetchURLs, this.requestInit)];
-                        case 1: return [2, _a.concat([
-                                _b.apply(void 0, [_c.sent()])
+                        case 1: return [2, _b.concat([
+                                _c.apply(void 0, [_d.sent()])
                             ])];
                     }
                 });
@@ -17583,6 +17524,13 @@
         BrowserHTTPRequest.URL_SCHEME_REGEX = /^https?:\/\//;
         return BrowserHTTPRequest;
     }());
+    function parseUrl(url) {
+        var lastSlash = url.lastIndexOf('/');
+        var lastSearchParam = url.lastIndexOf('?');
+        var prefix = url.substring(0, lastSlash);
+        var suffix = lastSearchParam > lastSlash ? url.substring(lastSearchParam) : '';
+        return [prefix + '/', suffix];
+    }
     function isHTTPScheme(url) {
         return url.match(BrowserHTTPRequest.URL_SCHEME_REGEX) != null;
     }
@@ -17877,7 +17825,7 @@
         expectArrayBuffersEqual: expectArrayBuffersEqual
     });
 
-    var version = '0.13.10';
+    var version = '0.13.11';
 
 
 
