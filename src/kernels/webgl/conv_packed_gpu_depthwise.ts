@@ -68,11 +68,26 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
           mainLoop += `
             wTexelR${r}C${col} = getW(${r}, ${col}, d1, q);
           `;
+
           if(col + 1 < filterWidth) {
             mainLoop += `
               wTexelR${r}C${col + 1} = getW(${r}, ${col + 1}, d1, q);
             `;
           }
+        }
+
+        if(col > 0) {
+          // last texel, last mixed with current texel
+          mainLoop += `
+            result += dot(xTexelR${r}C${col - 2}, vec4(wTexelR${r}C${col - 2}.xz, wTexelR${r}C${col - 2}.xz));
+            result += dot(xTexelR${r}C${col}, vec4(wTexelR${r}C${col - 1}.xz, wTexelR${r}C${col - 1}.xz));
+          `;
+        }
+
+        if(col < filterWidth && c === texelsAcross - 1) { // final texel - one more half dot product, when filterWidth is odd
+          mainLoop += `
+            result += dot(xTexelR${r}C${c}.xz, wTexelR${r}C${col}.xz);
+          `;
         }
 
         mainLoop += '}';
@@ -88,29 +103,6 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     xTexelR2C0
     xTexelR2C2
      */
-
-    mainLoop += `vec4 xTexel = vec4(0.); vec4 wTexel = vec4(0.);`;
-
-    for(let r=0; r<filterHeight; r++) {
-      for(let c=0; c<filterWidth; c++) {
-        let currentXTexel = `xTexelR${r}C${c}`;
-        let xTexel = `xTexel = ${currentXTexel}`;
-
-        if(c % 2 !== 0) {
-          currentXTexel = `xTexelR${r}C${c - 1}`;
-          let nextXTexel = `xTexelR${r}C${c + 1}`;
-          xTexel = `xTexel = vec4(${currentXTexel}.zw, ${nextXTexel}.xy)`;
-        }
-
-        let wTexel = `wTexel = vec4(wTexelR${r}C${c}.xy, wTexelR${r}C${c}.xy)`;
-
-        mainLoop += `
-          ${xTexel};
-          ${wTexel};
-          result += dot(xTexel, wTexel);
-        `;
-      }
-    }
 
     this.userCode = `
       const ivec2 strides = ivec2(${strideHeight}, ${strideWidth});
