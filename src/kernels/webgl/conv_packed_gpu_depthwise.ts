@@ -27,8 +27,8 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
   constructor(convInfo: Conv2DInfo) {
     this.outputShape = convInfo.outShape;
 
-    // const xNumRows = convInfo.inHeight;
-    // const xNumCols = convInfo.inWidth;
+    const xNumRows = convInfo.inHeight;
+    const xNumCols = convInfo.inWidth;
     const padTop = convInfo.padInfo.top;
     const padLeft = convInfo.padInfo.left;
     const strideHeight = convInfo.strideHeight;
@@ -38,17 +38,44 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     const filterHeight = convInfo.filterHeight;
     const filterWidth = convInfo.filterWidth;
     const channelMul = convInfo.outChannels / convInfo.inChannels;
+    const texelsAcross = Math.ceil((filterWidth + 1) / 2);
 
-    let mainLoop = ``;
-
-    let combinedPatchWidth = filterWidth + 1;
-    let texelsAcross = Math.ceil(combinedPatchWidth / 2);
+    let mainLoop = `int xR; int xC;`;
 
     for(let r=0; r<filterHeight; r++) {
       for(let c=0; c<texelsAcross; c++) {
+        mainLoop += `vec4 xTexelR${r}C${c * 2} = vec4(0.);`;
+      }
+    }
+
+    for(let r=0; r<filterHeight; r++) {
+      for(let c=0; c<filterWidth; c++) {
+        mainLoop += `vec4 wTexelR${r}C${c} = vec4(0.);`;
+      }
+    }
+
+    for(let r=0; r<filterHeight; r++) {
+      for(let c=0; c<texelsAcross; c++) {
+        const col = c * 2;
         mainLoop += `
-          vec4 xTexelR${r}C${c * 2} = getX(batch, xRCorner + ${r}, xCCorner + ${c * 2}, d1);
+          xR = xRCorner + ${r};
+          xC = xCCorner + ${col};
+          if(xR >= 0 && xR < ${xNumRows} && xC >= 0 && xC < ${xNumCols}) {
+            xTexelR${r}C${col} = getX(batch, xR, xCCorner + ${col}, d1);
         `;
+
+        if(col < filterWidth) {
+          mainLoop += `
+            wTexelR${r}C${col} = getW(${r}, ${col}, d1, q);
+          `;
+          if(col + 1 < filterWidth) {
+            mainLoop += `
+              wTexelR${r}C${col + 1} = getW(${r}, ${col + 1}, d1, q);
+            `;
+          }
+        }
+
+        mainLoop += '}';
       }
     }
 
@@ -61,14 +88,6 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     xTexelR2C0
     xTexelR2C2
      */
-
-    for(let r=0; r<filterHeight; r++) {
-      for(let c=0; c<filterWidth; c++) {
-        mainLoop += `
-          vec4 wTexelR${r}C${c} = getW(${r}, ${c}, d1, q);
-        `;
-      }
-    }
 
     mainLoop += `vec4 xTexel = vec4(0.); vec4 wTexel = vec4(0.);`;
 

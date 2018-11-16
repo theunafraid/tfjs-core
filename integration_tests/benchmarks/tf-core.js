@@ -5131,6 +5131,8 @@
             this.variableNames = ['x', 'W'];
             this.usesPackedTextures = true;
             this.outputShape = convInfo.outShape;
+            var xNumRows = convInfo.inHeight;
+            var xNumCols = convInfo.inWidth;
             var padTop = convInfo.padInfo.top;
             var padLeft = convInfo.padInfo.left;
             var strideHeight = convInfo.strideHeight;
@@ -5138,17 +5140,29 @@
             var filterHeight = convInfo.filterHeight;
             var filterWidth = convInfo.filterWidth;
             var channelMul = convInfo.outChannels / convInfo.inChannels;
-            var mainLoop = "";
-            var combinedPatchWidth = filterWidth + 1;
-            var texelsAcross = Math.ceil(combinedPatchWidth / 2);
+            var texelsAcross = Math.ceil((filterWidth + 1) / 2);
+            var mainLoop = "int xR; int xC;";
             for (var r = 0; r < filterHeight; r++) {
                 for (var c = 0; c < texelsAcross; c++) {
-                    mainLoop += "\n          vec4 xTexelR" + r + "C" + c * 2 + " = getX(batch, xRCorner + " + r + ", xCCorner + " + c * 2 + ", d1);\n        ";
+                    mainLoop += "vec4 xTexelR" + r + "C" + c * 2 + " = vec4(0.);";
                 }
             }
             for (var r = 0; r < filterHeight; r++) {
                 for (var c = 0; c < filterWidth; c++) {
-                    mainLoop += "\n          vec4 wTexelR" + r + "C" + c + " = getW(" + r + ", " + c + ", d1, q);\n        ";
+                    mainLoop += "vec4 wTexelR" + r + "C" + c + " = vec4(0.);";
+                }
+            }
+            for (var r = 0; r < filterHeight; r++) {
+                for (var c = 0; c < texelsAcross; c++) {
+                    var col = c * 2;
+                    mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n          if(xR >= 0 && xR < " + xNumRows + " && xC >= 0 && xC < " + xNumCols + ") {\n            xTexelR" + r + "C" + col + " = getX(batch, xR, xCCorner + " + col + ", d1);\n        ";
+                    if (col < filterWidth) {
+                        mainLoop += "\n            wTexelR" + r + "C" + col + " = getW(" + r + ", " + col + ", d1, q);\n          ";
+                        if (col + 1 < filterWidth) {
+                            mainLoop += "\n              wTexelR" + r + "C" + (col + 1) + " = getW(" + r + ", " + (col + 1) + ", d1, q);\n            ";
+                        }
+                    }
+                    mainLoop += '}';
                 }
             }
             mainLoop += "vec4 xTexel = vec4(0.); vec4 wTexel = vec4(0.);";
