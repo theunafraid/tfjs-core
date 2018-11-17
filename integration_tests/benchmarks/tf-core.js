@@ -5155,28 +5155,20 @@
             for (var r = 0; r < filterHeight; r++) {
                 for (var c = 0; c < texelsAcross; c++) {
                     var col = c * 2;
-                    mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n          if(xR >= 0 && xR < " + xNumRows + " && xC >= 0 && xC < " + xNumCols + ") {\n            xTexelR" + r + "C" + col + " = getX(batch, xR, xCCorner + " + col + ", d1);\n        ";
+                    mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n          if(xR >= 0 && xR < " + xNumRows + " && xC >= 0 && xC < " + xNumCols + ") {\n            xTexelR" + r + "C" + col + " = getX(batch, xR, xC, d1);\n        ";
                     if (col < filterWidth) {
                         mainLoop += "\n            wTexelR" + r + "C" + col + " = getW(" + r + ", " + col + ", d1, q);\n          ";
                         if (col + 1 < filterWidth) {
                             mainLoop += "\n              wTexelR" + r + "C" + (col + 1) + " = getW(" + r + ", " + (col + 1) + ", d1, q);\n            ";
                         }
                     }
-                    mainLoop += '}';
-                }
-            }
-            mainLoop += "vec4 xTexel = vec4(0.); vec4 wTexel = vec4(0.);";
-            for (var r = 0; r < filterHeight; r++) {
-                for (var c = 0; c < filterWidth; c++) {
-                    var currentXTexel = "xTexelR" + r + "C" + c;
-                    var xTexel = "xTexel = " + currentXTexel;
-                    if (c % 2 !== 0) {
-                        currentXTexel = "xTexelR" + r + "C" + (c - 1);
-                        var nextXTexel = "xTexelR" + r + "C" + (c + 1);
-                        xTexel = "xTexel = vec4(" + currentXTexel + ".zw, " + nextXTexel + ".xy)";
+                    if (col > 0) {
+                        mainLoop += "\n            result += xTexelR" + r + "C" + (col - 2) + " * vec4(wTexelR" + r + "C" + (col - 2) + ".xz, wTexelR" + r + "C" + (col - 2) + ".xz);\n\n            result += vec4(xTexelR" + r + "C" + (col - 2) + ".zw, xTexelR" + r + "C" + col + ".xy) * vec4(wTexelR" + r + "C" + (col - 1) + ".xz, wTexelR" + r + "C" + (col - 1) + ".xz);\n          ";
                     }
-                    var wTexel = "wTexel = vec4(wTexelR" + r + "C" + c + ".xy, wTexelR" + r + "C" + c + ".xy)";
-                    mainLoop += "\n          " + xTexel + ";\n          " + wTexel + ";\n          result += dot(xTexel, wTexel);\n        ";
+                    if (col < filterWidth && c === texelsAcross - 1) {
+                        mainLoop += "\n            result += vec4(xTexelR" + r + "C" + col + ".x, 0, xTexelR" + r + "C" + col + ".z, 0) * vec4(wTexelR" + r + "C" + col + ".x,0,wTexelR" + r + "C" + col + ".z,0);\n          ";
+                    }
+                    mainLoop += '}';
                 }
             }
             this.userCode = "\n      const ivec2 strides = ivec2(" + strideHeight + ", " + strideWidth + ");\n      const ivec2 pads = ivec2(" + padTop + ", " + padLeft + ");\n\n      void main() {\n        ivec4 coords = getOutputCoords();\n        int batch = coords.x;\n        ivec2 xRCCorner = coords.yz * strides - pads;\n        int d2 = coords.w;\n        int d1 = d2 / " + channelMul + ";\n        int q = d2 - d1 * " + channelMul + ";\n\n        int xRCorner = xRCCorner.x;\n        int xCCorner = xRCCorner.y;\n\n        vec4 result = vec4(0.);\n\n        " + mainLoop + "\n\n        setOutput(result);\n      }\n    ";
