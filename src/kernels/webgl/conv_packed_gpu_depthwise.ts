@@ -87,7 +87,7 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
 
         if(col < filterWidth && c === texelsAcross - 1) { // final texel - one more half dot product, when filterWidth is odd
           mainLoop += `
-            result += vec4(xTexelR${r}C${col}.x, 0, xTexelR${r}C${col}.z, 0) * vec4(wTexelR${r}C${col}.x,0,wTexelR${r}C${col}.z,0);
+            result += xTexelR${r}C${col} * wTexelR${r}C${col};
           `;
         }
 
