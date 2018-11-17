@@ -61,7 +61,7 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
           xR = xRCorner + ${r};
           xC = xCCorner + ${col};
           if(xR >= 0 && xR < ${xNumRows} && xC >= 0 && xC < ${xNumCols}) {
-            xTexelR${r}C${col} = getX(batch, xR, xCCorner + ${col}, d1);
+            xTexelR${r}C${col} = getX(batch, xR, xC, d1);
         `;
 
         if(col < filterWidth) {
@@ -79,14 +79,15 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
         if(col > 0) {
           // last texel, last mixed with current texel
           mainLoop += `
-            result += dot(xTexelR${r}C${col - 2}, vec4(wTexelR${r}C${col - 2}.xz, wTexelR${r}C${col - 2}.xz));
-            result += dot(xTexelR${r}C${col}, vec4(wTexelR${r}C${col - 1}.xz, wTexelR${r}C${col - 1}.xz));
+            result += xTexelR${r}C${col - 2} * vec4(wTexelR${r}C${col - 2}.xz, wTexelR${r}C${col - 2}.xz);
+
+            result += vec4(xTexelR${r}C${col - 2}.zw, xTexelR${r}C${col}.xy) * vec4(wTexelR${r}C${col - 1}.xz, wTexelR${r}C${col - 1}.xz);
           `;
         }
 
         if(col < filterWidth && c === texelsAcross - 1) { // final texel - one more half dot product, when filterWidth is odd
           mainLoop += `
-            result += dot(xTexelR${r}C${c}.xz, wTexelR${r}C${col}.xz);
+            result += xTexelR${r}C${c}.xz * wTexelR${r}C${col}.xz;
           `;
         }
 
