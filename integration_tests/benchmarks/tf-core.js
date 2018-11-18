@@ -5157,9 +5157,9 @@
                     var col = c * 2;
                     mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n        ";
                     if (c === 0) {
-                        mainLoop += "\n            if(xR >= 0 && xR < " + xNumRows + " && xC - 1 >= 0 && xC - 1 <= " + xNumCols + ") {\n              xTexelR" + r + "C" + (col - 1 < 0 ? 'minus1' : col - 1) + " = getX(batch, xR, xC - 1, d1);\n            }\n          ";
+                        mainLoop += "\n            if(xR >= 0 && xR < " + xNumRows + " && xC - 1 >= 0 && xC - 1 < " + xNumCols + ") {\n              xTexelR" + r + "C" + (col - 1 < 0 ? 'minus1' : col - 1) + " = getX(batch, xR, xC - 1, d1);\n            }\n          ";
                     }
-                    mainLoop += "\n          if(xR >= 0 && xR < " + xNumRows + " && xC + 1 >= 0 && xC + 1 <= " + xNumCols + ") {\n            xTexelR" + r + "C" + (col + 1) + " = getX(batch, xR, xC + 1, d1);\n          }\n        ";
+                    mainLoop += "\n          if(xR >= 0 && xR < " + xNumRows + " && xC + 1 >= 0 && xC + 1 < " + xNumCols + ") {\n            xTexelR" + r + "C" + (col + 1) + " = getX(batch, xR, xC + 1, d1);\n          }\n        ";
                     if (col < filterWidth) {
                         mainLoop += "\n            wTexelR" + r + "C" + col + " = getW(" + r + ", " + col + ", d1, q);\n          ";
                         if (col + 1 < filterWidth) {
@@ -5208,7 +5208,7 @@
             for (var r = 0; r < filterHeight; r++) {
                 for (var c = 0; c < texelsAcross; c++) {
                     var col = c * 2;
-                    mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n          if(xR >= 0 && xR <= " + xNumRows + " && xC >= 0 && xC <= " + xNumCols + ") {\n            xTexelR" + r + "C" + col + " = getX(batch, xR, xC, d1);\n        ";
+                    mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n          if(xR >= 0 && xR < " + xNumRows + " && xC >= 0 && xC < " + xNumCols + ") {\n            xTexelR" + r + "C" + col + " = getX(batch, xR, xC, d1);\n        ";
                     if (col < filterWidth) {
                         mainLoop += "\n            wTexelR" + r + "C" + col + " = getW(" + r + ", " + col + ", d1, q);\n          ";
                         if (col + 1 < filterWidth) {

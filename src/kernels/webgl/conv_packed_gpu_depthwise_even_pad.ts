@@ -60,7 +60,7 @@ export class DepthwiseConv2DEvenPackedProgram implements GPGPUProgram {
         mainLoop += `
           xR = xRCorner + ${r};
           xC = xCCorner + ${col};
-          if(xR >= 0 && xR <= ${xNumRows} && xC >= 0 && xC <= ${xNumCols}) {
+          if(xR >= 0 && xR < ${xNumRows} && xC >= 0 && xC < ${xNumCols}) {
             xTexelR${r}C${col} = getX(batch, xR, xC, d1);
         `;
 

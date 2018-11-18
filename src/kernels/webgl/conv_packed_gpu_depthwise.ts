@@ -26,7 +26,6 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
 
   constructor(convInfo: Conv2DInfo) {
     this.outputShape = convInfo.outShape;
-    console.log(convInfo)
 
     const xNumRows = convInfo.inHeight;
     const xNumCols = convInfo.inWidth;
@@ -66,14 +65,14 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
 
         if(c === 0) { // first in a row
           mainLoop += `
-            if(xR >= 0 && xR < ${xNumRows} && xC - 1 >= 0 && xC - 1 <= ${xNumCols}) {
+            if(xR >= 0 && xR < ${xNumRows} && xC - 1 >= 0 && xC - 1 < ${xNumCols}) {
               xTexelR${r}C${col - 1 < 0 ? 'minus1' : col - 1} = getX(batch, xR, xC - 1, d1);
             }
           `;
         }
 
         mainLoop += `
-          if(xR >= 0 && xR < ${xNumRows} && xC + 1 >= 0 && xC + 1 <= ${xNumCols}) {
+          if(xR >= 0 && xR < ${xNumRows} && xC + 1 >= 0 && xC + 1 < ${xNumCols}) {
             xTexelR${r}C${col + 1} = getX(batch, xR, xC + 1, d1);
           }
         `;
