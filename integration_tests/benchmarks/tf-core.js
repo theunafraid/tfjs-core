@@ -5126,9 +5126,10 @@
         return Conv2DProgram;
     }());
 
-    var DepthwiseConv2DProgram = (function () {
-        function DepthwiseConv2DProgram(convInfo) {
+    var DepthwiseConv2DStrideGT1PackedProgram = (function () {
+        function DepthwiseConv2DStrideGT1PackedProgram(convInfo) {
             this.variableNames = ['x', 'W'];
+            this.usesPackedTextures = true;
             this.outputShape = convInfo.outShape;
             var xNumRows = convInfo.inHeight;
             var xNumCols = convInfo.inWidth;
@@ -5136,14 +5137,48 @@
             var padLeft = convInfo.padInfo.left;
             var strideHeight = convInfo.strideHeight;
             var strideWidth = convInfo.strideWidth;
-            var dilationHeight = convInfo.dilationHeight;
-            var dilationWidth = convInfo.dilationWidth;
             var filterHeight = convInfo.filterHeight;
             var filterWidth = convInfo.filterWidth;
             var channelMul = convInfo.outChannels / convInfo.inChannels;
-            this.userCode = "\n      const ivec2 strides = ivec2(" + strideHeight + ", " + strideWidth + ");\n      const ivec2 pads = ivec2(" + padTop + ", " + padLeft + ");\n\n      void main() {\n        ivec4 coords = getOutputCoords();\n        int batch = coords.x;\n        ivec2 xRCCorner = coords.yz * strides - pads;\n        int d2 = coords.w;\n        int d1 = d2 / " + channelMul + ";\n        int q = d2 - d1 * " + channelMul + ";\n\n        int xRCorner = xRCCorner.x;\n        int xCCorner = xRCCorner.y;\n\n        // Convolve x(?, ?, d1) with w(:, :, d1, q) to get y(yR, yC, d2).\n        // ? = to be determined. : = across all values in that axis.\n        float dotProd = 0.0;\n        // TODO(dsmilkov): Flatten the two for loops and vec4 the operations.\n        for (int wR = 0; wR < " + filterHeight + "; wR++) {\n          int xR = xRCorner + wR * " + dilationHeight + ";\n\n          if (xR < 0 || xR >= " + xNumRows + ") {\n            continue;\n          }\n\n          for (int wC = 0; wC < " + filterWidth + "; wC++) {\n            int xC = xCCorner + wC * " + dilationWidth + ";\n\n            if (xC < 0 || xC >= " + xNumCols + ") {\n              continue;\n            }\n\n            float xVal = getX(batch, xR, xC, d1);\n            float wVal = getW(wR, wC, d1, q);\n            dotProd += xVal * wVal;\n          }\n        }\n        setOutput(dotProd);\n      }\n    ";
+            var texelsAcross = Math.ceil((filterWidth + 1) * strideWidth / 2);
+            var mainLoop = "int xR; int xC; vec4 xTexel = vec4(0.0);";
+            for (var r = 0; r < filterHeight; r++) {
+                for (var c = 0; c < texelsAcross; c++) {
+                    mainLoop += "vec4 xTexelR" + r + "C" + c * 2 + " = vec4(0.);";
+                }
+            }
+            for (var r = 0; r < filterHeight; r++) {
+                for (var c = 0; c < filterWidth; c++) {
+                    mainLoop += "vec4 wTexelR" + r + "C" + c + " = vec4(0.);";
+                }
+            }
+            for (var r = 0; r < filterHeight; r++) {
+                for (var c = 0; c < texelsAcross; c++) {
+                    var col = c * 2;
+                    mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n\n          if(xR >= 0 && xR < " + xNumRows + " && xC >= 0 && xC < " + xNumCols + ") {\n            xTexelR" + r + "C" + col + " = getX(batch, xR, xC, d1);\n        ";
+                    if (col < filterWidth) {
+                        mainLoop += "\n            wTexelR" + r + "C" + col + " = getW(" + r + ", " + col + ", d1, q);\n          ";
+                        if (col + 1 < filterWidth) {
+                            mainLoop += "\n              wTexelR" + r + "C" + (col + 1) + " = getW(" + r + ", " + (col + 1) + ", d1, q);\n            ";
+                        }
+                    }
+                    mainLoop += '}';
+                }
+            }
+            for (var r = 0; r < filterHeight; r++) {
+                for (var c = 0; c < filterWidth; c++) {
+                    if (c % 2 === 0) {
+                        mainLoop += "\n            xTexel = vec4(xTexelR" + r + "C" + c + ".xy, xTexelR" + r + "C" + (c + 2) + ".xy);\n          ";
+                    }
+                    else {
+                        mainLoop += "\n            xTexel = vec4(xTexelR" + r + "C" + (c - 1) + ".zw, xTexelR" + r + "C" + (c + 1) + ".zw);\n          ";
+                    }
+                    mainLoop += "\n          result += xTexel * vec4(wTexelR" + r + "C" + c + ".xz, wTexelR" + r + "C" + c + ".xz);\n        ";
+                }
+            }
+            this.userCode = "\n      const ivec2 strides = ivec2(" + strideHeight + ", " + strideWidth + ");\n      const ivec2 pads = ivec2(" + padTop + ", " + padLeft + ");\n\n      void main() {\n        ivec4 coords = getOutputCoords();\n        int batch = coords.x;\n        ivec2 xRCCorner = coords.yz * strides - pads;\n        int d2 = coords.w;\n        int d1 = d2 / " + channelMul + ";\n        int q = d2 - d1 * " + channelMul + ";\n\n        int xRCorner = xRCCorner.x;\n        int xCCorner = xRCCorner.y;\n\n        vec4 result = vec4(0.);\n\n        " + mainLoop + "\n\n        setOutput(result);\n      }\n    ";
         }
-        return DepthwiseConv2DProgram;
+        return DepthwiseConv2DStrideGT1PackedProgram;
     }());
 
     var DepthwiseConv2DPackedProgram = (function () {
@@ -5163,7 +5198,7 @@
             var texelsAcross = Math.ceil((filterWidth + 1) / 2);
             var mainLoop = "int xR; int xC;";
             for (var r = 0; r < filterHeight; r++) {
-                for (var c = -1; c < filterWidth + 2; c++) {
+                for (var c = -1; c < filterWidth + 1; c++) {
                     mainLoop += "vec4 xTexelR" + r + "C" + (c < 0 ? 'minus1' : c) + " = vec4(0.);";
                 }
             }
@@ -10277,12 +10312,13 @@
         };
         MathBackendWebGL.prototype.depthwiseConv2D = function (x, filter, convInfo) {
             var program;
-            if (convInfo.strideWidth > 1 && convInfo.outShape[1] > 1) {
-                program = new DepthwiseConv2DProgram(convInfo);
-                return this.compileAndRun(program, [x, filter]);
-            }
             if (convInfo.padInfo.left % 2 === 0) {
-                program = new DepthwiseConv2DEvenPackedProgram(convInfo);
+                if (convInfo.strideHeight > 1 && convInfo.outShape[1] > 1) {
+                    program = new DepthwiseConv2DStrideGT1PackedProgram(convInfo);
+                }
+                else {
+                    program = new DepthwiseConv2DEvenPackedProgram(convInfo);
+                }
             }
             else {
                 program = new DepthwiseConv2DPackedProgram(convInfo);
