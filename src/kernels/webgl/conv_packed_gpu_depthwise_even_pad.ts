@@ -18,7 +18,7 @@
 import {Conv2DInfo} from '../../ops/conv_util';
 import {GPGPUProgram} from './gpgpu_math';
 
-export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
+export class DepthwiseConv2DEvenPackedProgram implements GPGPUProgram {
   variableNames = ['x', 'W'];
   usesPackedTextures = true;
   outputShape: number[];
