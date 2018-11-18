@@ -5155,7 +5155,7 @@
             for (var r = 0; r < filterHeight; r++) {
                 for (var c = 0; c < texelsAcross; c++) {
                     var col = c * 2;
-                    mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n          if(xR >= 0 && xR < " + xNumRows + " && xC >= 0 && xC < " + xNumCols + ") {\n            xTexelR" + r + "C" + col + " = getX(batch, xR, xC, d1);\n        ";
+                    mainLoop += "\n          xR = xRCorner + " + r + ";\n          xC = xCCorner + " + col + ";\n          if(xR >= 0 && xR <= " + xNumRows + " && xC >= 0 && xC <= " + xNumCols + ") {\n            xTexelR" + r + "C" + col + " = getX(batch, xR, xC, d1);\n        ";
                     if (col < filterWidth) {
                         mainLoop += "\n            wTexelR" + r + "C" + col + " = getW(" + r + ", " + col + ", d1, q);\n          ";
                         if (col + 1 < filterWidth) {
@@ -5166,7 +5166,7 @@
                         mainLoop += "\n            result += xTexelR" + r + "C" + (col - 2) + " * vec4(wTexelR" + r + "C" + (col - 2) + ".xz, wTexelR" + r + "C" + (col - 2) + ".xz);\n\n            result += vec4(xTexelR" + r + "C" + (col - 2) + ".zw, xTexelR" + r + "C" + col + ".xy) * vec4(wTexelR" + r + "C" + (col - 1) + ".xz, wTexelR" + r + "C" + (col - 1) + ".xz);\n          ";
                     }
                     if (col < filterWidth && c === texelsAcross - 1) {
-                        mainLoop += "\n            result += vec4(xTexelR" + r + "C" + col + ".x, 0, xTexelR" + r + "C" + col + ".z, 0) * vec4(wTexelR" + r + "C" + col + ".x,0,wTexelR" + r + "C" + col + ".z,0);\n          ";
+                        mainLoop += "\n            result += xTexelR" + r + "C" + col + " * wTexelR" + r + "C" + col + ".xzyw;\n          ";
                     }
                     mainLoop += '}';
                 }

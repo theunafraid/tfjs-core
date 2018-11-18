@@ -26,7 +26,6 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
 
   constructor(convInfo: Conv2DInfo) {
     this.outputShape = convInfo.outShape;
-    console.log(convInfo)
 
     const xNumRows = convInfo.inHeight;
     const xNumCols = convInfo.inWidth;
@@ -44,8 +43,8 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     let mainLoop = `int xR; int xC;`;
 
     for(let r=0; r<filterHeight; r++) {
-      for(let c=-1; c<filterWidth+2; c++) {
-        mainLoop += `vec4 xTexelR${r}C${c < 0 ? 'minus1' : c} = vec4(0.);`;
+      for(let c=0; c<texelsAcross; c++) {
+        mainLoop += `vec4 xTexelR${r}C${c * 2} = vec4(0.);`;
       }
     }
 
@@ -58,24 +57,11 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     for(let r=0; r<filterHeight; r++) {
       for(let c=0; c<texelsAcross; c++) {
         const col = c * 2;
-
         mainLoop += `
           xR = xRCorner + ${r};
           xC = xCCorner + ${col};
-        `;
-
-        if(c === 0) { // first in a row
-          mainLoop += `
-            if(xR >= 0 && xR < ${xNumRows} && xC - 1 >= 0 && xC - 1 <= ${xNumCols}) {
-              xTexelR${r}C${col - 1 < 0 ? 'minus1' : col - 1} = getX(batch, xR, xC - 1, d1);
-            }
-          `;
-        }
-
-        mainLoop += `
-          if(xR >= 0 && xR < ${xNumRows} && xC + 1 >= 0 && xC + 1 <= ${xNumCols}) {
-            xTexelR${r}C${col + 1} = getX(batch, xR, xC + 1, d1);
-          }
+          if(xR >= 0 && xR <= ${xNumRows} && xC >= 0 && xC <= ${xNumCols}) {
+            xTexelR${r}C${col} = getX(batch, xR, xC, d1);
         `;
 
         if(col < filterWidth) {
@@ -90,17 +76,22 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
           }
         }
 
-        mainLoop += `
-          xTexelR${r}C${col} = vec4(xTexelR${r}C${col - 1 < 0 ? 'minus1' : col - 1}.zw, xTexelR${r}C${col + 1}.xy);
-        `;
-      }
-    }
+        if(col > 0) {
+          // last texel, last mixed with current texel
+          mainLoop += `
+            result += xTexelR${r}C${col - 2} * vec4(wTexelR${r}C${col - 2}.xz, wTexelR${r}C${col - 2}.xz);
 
-    for(let r=0; r<filterHeight; r++) {
-      for(let c=0; c<filterWidth; c++) {
-        mainLoop += `
-          result += xTexelR${r}C${c} * vec4(wTexelR${r}C${c}.xz, wTexelR${r}C${c}.xz);
-        `;
+            result += vec4(xTexelR${r}C${col - 2}.zw, xTexelR${r}C${col}.xy) * vec4(wTexelR${r}C${col - 1}.xz, wTexelR${r}C${col - 1}.xz);
+          `;
+        }
+
+        if(col < filterWidth && c === texelsAcross - 1) { // final texel - one more half dot product, when filterWidth is odd
+          mainLoop += `
+            result += xTexelR${r}C${col} * wTexelR${r}C${col}.xzyw;
+          `;
+        }
+
+        mainLoop += '}';
       }
     }
 
@@ -128,13 +119,3 @@ export class DepthwiseConv2DPackedProgram implements GPGPUProgram {
     `;
   }
 }
-
-/*
-leftovers
-
-implement out of bounds condition
-
-AFTER MOBILENET WORKS
-
-dilation
- */
