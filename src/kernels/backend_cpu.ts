@@ -104,11 +104,20 @@ export class MathBackendCPU implements KernelBackend {
       throw new Error('pixels passed to tf.fromPixels() can not be null');
     }
     let vals: Uint8ClampedArray;
-    // tslint:disable-next-line:no-any
-    if (ENV.get('IS_NODE') && (pixels as any).getContext == null) {
+    if (ENV.get('IS_NODE') && pixels.width != null &&
+        // tslint:disable-next-line:no-any
+        (pixels as any).naturalWidth != null) {
       throw new Error(
-          'When running in node, pixels must be an HTMLCanvasElement ' +
-          'like the one returned by the `canvas` npm package');
+          'Looks like you are using the `canvas` npm package and passed an ' +
+          'image to tf.fromPixels(), however you should pass a canvas instead');
+    }
+    // tslint:disable-next-line:no-any
+    if (ENV.get('IS_NODE') && (pixels as any).getContext == null &&
+        // tslint:disable-next-line:no-any
+        (pixels as any).data == null) {
+      throw new Error(
+          'When running in node, pixels must be a canvas like the one ' +
+          'returned by the `canvas` npm package');
     }
     // tslint:disable-next-line:no-any
     if ((pixels as any).getContext != null) {
@@ -117,8 +126,12 @@ export class MathBackendCPU implements KernelBackend {
                  .getContext('2d')
                  .getImageData(0, 0, pixels.width, pixels.height)
                  .data;
-    } else if (pixels instanceof ImageData) {
-      vals = pixels.data;
+    } else if (
+        // tslint:disable-next-line:no-any
+        ((pixels as any).data != null && pixels.width != null) ||
+        pixels instanceof ImageData) {
+      // tslint:disable-next-line:no-any
+      vals = (pixels as any).data;
     } else if (
         pixels instanceof HTMLImageElement ||
         pixels instanceof HTMLVideoElement) {

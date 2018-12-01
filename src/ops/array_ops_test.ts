@@ -20,6 +20,7 @@ import {describeWithFlags} from '../jasmine_util';
 import {ALL_ENVS, BROWSER_ENVS, CPU_ENVS, expectArraysClose, expectArraysEqual, expectPromiseToFail, expectValuesInRange, NODE_ENVS, WEBGL_ENVS} from '../test_util';
 import * as util from '../util';
 import {expectArrayInMeanStdRange, jarqueBeraNormalityTest} from './rand_util';
+import {loadImage, createCanvas, createImageData} from 'canvas';
 
 describeWithFlags('zeros', ALL_ENVS, () => {
   it('1D default dtype', () => {
@@ -1244,6 +1245,56 @@ class MockCanvas {
     return new MockContext();
   }
 }
+
+describeWithFlags('fromPixels + canvas npm package', NODE_ENVS, () => {
+  let img: HTMLImageElement;
+
+  beforeAll(async () => {
+    img = await loadImage('./src/ops/image_test.png');
+  });
+
+  it('canvas with the image drawn', async () => {
+    const canvas = createCanvas(img.width, img.height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const t = tf.fromPixels(canvas);
+    expect(t.dtype).toBe('int32');
+    expect(t.shape).toEqual([2, 2, 3]);
+    expectArraysEqual(t, [255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]);
+  });
+
+  it('empty canvas', async () => {
+    const canvas = createCanvas(img.width, img.height);
+    const t = tf.fromPixels(canvas);
+    expect(t.dtype).toBe('int32');
+    expect(t.shape).toEqual([2, 2, 3]);
+    expectArraysEqual(t, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it('image data ', async () => {
+    const pixels = [1, 2, 3, 0, 4, 5, 6, 0, 7, 8, 9, 0, 10, 11, 12, 0];
+    const imgData = createImageData(new Uint8ClampedArray(pixels), 2, 2);
+    const t = tf.fromPixels(imgData);
+    expect(t.dtype).toBe('int32');
+    expect(t.shape).toEqual([2, 2, 3]);
+    expectArraysEqual(t, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  });
+
+  it('passing an image throws an error', () => {
+    expect(() => tf.fromPixels(img))
+      .toThrowError(
+        'Looks like you are using the `canvas` npm package and passed an ' +
+        'image to tf.fromPixels(), however you should pass a canvas instead');
+  });
+
+  it('passing an empty object throws error', () => {
+    // tslint:disable-next-line:no-any
+    expect(() => tf.fromPixels({} as any))
+        .toThrowError(
+            'When running in node, pixels must be a canvas like the one ' +
+            'returned by the `canvas` npm package');
+  });
+});
 
 describeWithFlags('fromPixels, mock canvas', NODE_ENVS, () => {
   it('accepts a canvas-like element', () => {
