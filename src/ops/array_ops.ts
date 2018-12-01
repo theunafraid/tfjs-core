@@ -301,6 +301,8 @@ function oneHot_(
       grad);
 }
 
+let fromPixels2DContext: CanvasRenderingContext2D;
+
 /**
  * Creates a `tf.Tensor` from an image.
  *
@@ -324,11 +326,60 @@ function oneHot_(
 function fromPixels_(
     pixels: ImageData|HTMLImageElement|HTMLCanvasElement|HTMLVideoElement,
     numChannels = 3): Tensor3D {
-  if (numChannels > 4) {
+  // Sanity checks.
+  if (numChannels == null || numChannels > 4 || numChannels <= 0) {
     throw new Error(
-        'Cannot construct Tensor with more than 4 channels from pixels.');
+        `numChannels passed to tf.fromPixels() must be between 1 and 4, ` +
+        `but was ${numChannels}`);
   }
-  return ENV.engine.fromPixels(pixels, numChannels);
+  if (pixels == null) {
+    throw new Error('pixels passed to tf.fromPixels() can not be null');
+  }
+
+  // tslint:disable-next-line:no-any
+  let input = pixels as any;
+  // If user passed a context, point to the canvas (normalize the input).
+  if (input.canvas != null) {
+    input = input.canvas;
+  }
+  if (ENV.get('IS_NODE')) {
+    if (input.width != null && input.naturalWidth != null) {
+      throw new Error(
+          'Looks like you are using the `canvas` npm package and passed an ' +
+          'image to tf.fromPixels(), however you should pass a canvas instead');
+    }
+    if (input.getContext == null && input.data == null) {
+      throw new Error(
+          'When running in node, pixels must be a canvas like the one ' +
+          'returned by the `canvas` npm package');
+    }
+  } else if (ENV.get('IS_BROWSER')) {
+    if (!(input instanceof HTMLVideoElement) &&
+        !(input instanceof HTMLImageElement) &&
+        !(input instanceof HTMLCanvasElement) &&
+        !(input instanceof ImageData)) {
+      throw new Error(
+          'pixels passed to tf.fromPixels() must be either an ' +
+          `HTMLVideoElement, HTMLImageElement, HTMLCanvasElement or ` +
+          `ImageData, but was ${input.constructor.name}`);
+    }
+    if (input instanceof HTMLVideoElement) {
+      if (fromPixels2DContext == null) {
+        if (document.readyState !== 'complete') {
+          throw new Error(
+              'The DOM is not ready yet. Please call tf.fromPixels() ' +
+              'once the DOM is ready. One way to do that is to add an event ' +
+              'listener for `DOMContentLoaded` on the document object');
+        }
+        fromPixels2DContext = document.createElement('canvas').getContext('2d');
+      }
+      fromPixels2DContext.canvas.width = input.width;
+      fromPixels2DContext.canvas.height = input.height;
+      fromPixels2DContext.drawImage(input, 0, 0, input.width, input.height);
+      input = fromPixels2DContext.canvas;
+    }
+  }
+  return ENV.backend.fromPixels(input, numChannels);
 }
 
 /**
@@ -603,7 +654,8 @@ function tile_<T extends Tensor>(x: T|TensorLike, reps: number[]): T {
 }
 
 /**
- * Pads a `tf.Tensor1D` with a given value and paddings. See `pad` for details.
+ * Pads a `tf.Tensor1D` with a given value and paddings. See `pad` for
+ * details.
  */
 function pad1d_(
     x: Tensor1D|TensorLike, paddings: [number, number],
@@ -615,7 +667,8 @@ function pad1d_(
 }
 
 /**
- * Pads a `tf.Tensor2D` with a given value and paddings. See `pad` for details.
+ * Pads a `tf.Tensor2D` with a given value and paddings. See `pad` for
+ * details.
  */
 function pad2d_(
     x: Tensor2D|TensorLike, paddings: [[number, number], [number, number]],
@@ -628,7 +681,8 @@ function pad2d_(
 }
 
 /**
- * Pads a `tf.Tensor3D` with a given value and paddings. See `pad` for details.
+ * Pads a `tf.Tensor3D` with a given value and paddings. See `pad` for
+ * details.
  */
 function pad3d_(
     x: Tensor3D|TensorLike,
@@ -642,7 +696,8 @@ function pad3d_(
 }
 
 /**
- * Pads a `tf.Tensor4D` with a given value and paddings. See `pad` for details.
+ * Pads a `tf.Tensor4D` with a given value and paddings. See `pad` for
+ * details.
  */
 function pad4d_(
     x: Tensor4D|TensorLike,
@@ -764,10 +819,12 @@ function stack_<T extends Tensor>(
  * remainingShape`, where spatialShape has `M` dimensions.
  * @param blockShape A 1-D array. Must have shape `[M]`, all values must
  * be >= 1.
- * @param crops A 2-D array.  Must have shape `[M, 2]`, all values must be >= 0.
+ * @param crops A 2-D array.  Must have shape `[M, 2]`, all values must be >=
+ *     0.
  * `crops[i] = [cropStart, cropEnd]` specifies the amount to crop from input
- * dimension `i + 1`, which corresponds to spatial dimension `i`. It is required
- * that `cropStart[i] + cropEnd[i] <= blockShape[i] * inputShape[i + 1]`
+ * dimension `i + 1`, which corresponds to spatial dimension `i`. It is
+ * required that `cropStart[i] + cropEnd[i] <= blockShape[i] * inputShape[i +
+ * 1]`
  *
  * This operation is equivalent to the following steps:
  *
@@ -842,10 +899,10 @@ function batchToSpaceND_<T extends Tensor>(
  * remainingShape`, where spatialShape has `M` dimensions.
  * @param blockShape A 1-D array. Must have shape `[M]`, all values must
  * be >= 1.
- * @param paddings A 2-D array. Must have shape `[M, 2]`, all values must be >=
- *     0. `paddings[i] = [padStart, padEnd]` specifies the amount to zero-pad
- * from input dimension `i + 1`, which corresponds to spatial dimension `i`. It
- * is required that
+ * @param paddings A 2-D array. Must have shape `[M, 2]`, all values must be
+ *     >= 0. `paddings[i] = [padStart, padEnd]` specifies the amount to
+ *     zero-pad from input dimension `i + 1`, which corresponds to spatial
+ *     dimension `i`. It is required that
  * `(inputShape[i + 1] + padStart + padEnd) % blockShape[i] === 0`
  *
  * This operation is equivalent to the following steps:
@@ -857,9 +914,9 @@ function batchToSpaceND_<T extends Tensor>(
  * `[batch] + [paddedShape[1] / blockShape[0], blockShape[0], ...,
  * paddedShape[M] / blockShape[M-1], blockShape[M-1]] + remainingShape`
  *
- * 3. Permute dimensions of `reshapedPadded` to produce `permutedReshapedPadded`
- * of shape: `blockShape + [batch] + [paddedShape[1] / blockShape[0], ...,
- * paddedShape[M] / blockShape[M-1]] + remainingShape`
+ * 3. Permute dimensions of `reshapedPadded` to produce
+ * `permutedReshapedPadded` of shape: `blockShape + [batch] + [paddedShape[1]
+ * / blockShape[0], ..., paddedShape[M] / blockShape[M-1]] + remainingShape`
  *
  * 4. Reshape `permutedReshapedPadded` to flatten `blockShape` into the
  * batch dimension, producing an output tensor of shape:
@@ -906,7 +963,8 @@ function spaceToBatchND_<T extends Tensor>(
 }
 
 /**
- * Unstacks a `tf.Tensor` of rank-`R` into a list of rank-`(R-1)` `tf.Tensor`s.
+ * Unstacks a `tf.Tensor` of rank-`R` into a list of rank-`(R-1)`
+ * `tf.Tensor`s.
  *
  * ```js
  * const a = tf.tensor2d([1, 2, 3, 4], [2, 2]);
@@ -1025,9 +1083,9 @@ function expandDims_<R2 extends Rank>(
 /**
  * Rearranges data from depth into blocks of spatial data. More specifically,
  * this op outputs a copy of the input tensor where values from the `depth`
- * dimension are moved in spatial blocks to the `height` and `width` dimensions.
- * The attr `blockSize` indicates the input block size and how the data is
- * moved.
+ * dimension are moved in spatial blocks to the `height` and `width`
+ * dimensions. The attr `blockSize` indicates the input block size and how the
+ * data is moved.
  *
  *  - Chunks of data of size `blockSize * blockSize` from depth are rearranged
  * into non-overlapping blocks of size `blockSize x blockSize`
@@ -1035,8 +1093,8 @@ function expandDims_<R2 extends Rank>(
  *  - The width the output tensor is `inputWidth * blockSize`, whereas the
  * height is `inputHeight * blockSize`
  *
- *  - The Y, X coordinates within each block of the output image are determined
- * by the high order component of the input channel index
+ *  - The Y, X coordinates within each block of the output image are
+ * determined by the high order component of the input channel index
  *
  *  - The depth of the input tensor must be divisible by `blockSize *
  * blockSize`
@@ -1055,7 +1113,8 @@ function expandDims_<R2 extends Rank>(
  *
  * @param x The input tensor of rank 4
  * @param blockSIze  An `int` that is `>= 2`. The size of the spatial block
- * @param dataFormat An optional string from: "NHWC", "NCHW". Defaults to "NHWC"
+ * @param dataFormat An optional string from: "NHWC", "NCHW". Defaults to
+ *     "NHWC"
  */
 /** @doc {heading: 'Tensors', subheading: 'Transformations'} */
 function depthToSpace_(
@@ -1095,8 +1154,8 @@ function depthToSpace_(
  * Given a Tensor `x` and a Tensor `y`, this operation returns a Tensor `out`
  * that represents all values that are in `x` but not in `y`. The returned
  * Tensor `out` is sorted in the same order that the numbers appear in `x`
- * (duplicates are preserved). This operation also returns a Tensor indices that
- * represents the position of each out element in `x`. In other words:
+ * (duplicates are preserved). This operation also returns a Tensor indices
+ * that represents the position of each out element in `x`. In other words:
  *
  * `out[i] = x[idx[i]] for i in [0, 1, ..., out.length - 1]`
  *

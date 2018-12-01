@@ -18,7 +18,7 @@
 import {BackendTimingInfo, DataMover, KernelBackend} from './kernels/backend';
 import {Profiler} from './profiler';
 import {backpropagateGradients, getFilteredNodesXToY, NamedGradientMap, TapeNode} from './tape';
-import {DataId, Tensor, Tensor3D, Variable} from './tensor';
+import {DataId, Tensor, Variable} from './tensor';
 import {NamedTensorMap, NamedVariableMap, TensorContainer} from './tensor_types';
 import {getTensorsInContainer, isTensorInList} from './tensor_util';
 import {DataType, DataValues} from './types';
@@ -588,11 +588,7 @@ export class Engine implements TensorManager, DataMover {
     const info = this.tensorInfo.get(dataId);
     return info.backend.read(dataId);
   }
-  fromPixels(
-      pixels: ImageData|HTMLImageElement|HTMLCanvasElement|HTMLVideoElement,
-      numChannels: number): Tensor3D {
-    return this.backend.fromPixels(pixels, numChannels);
-  }
+
   async time(query: () => void): Promise<TimingInfo> {
     const start = now();
     const timingInfo = await this.backend.time(query) as TimingInfo;

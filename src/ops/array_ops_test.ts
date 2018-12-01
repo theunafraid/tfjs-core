@@ -20,7 +20,6 @@ import {describeWithFlags} from '../jasmine_util';
 import {ALL_ENVS, BROWSER_ENVS, CPU_ENVS, expectArraysClose, expectArraysEqual, expectPromiseToFail, expectValuesInRange, NODE_ENVS, WEBGL_ENVS} from '../test_util';
 import * as util from '../util';
 import {expectArrayInMeanStdRange, jarqueBeraNormalityTest} from './rand_util';
-import {loadImage, createCanvas, createImageData} from 'canvas';
 
 describeWithFlags('zeros', ALL_ENVS, () => {
   it('1D default dtype', () => {
@@ -1248,24 +1247,38 @@ class MockCanvas {
 
 describeWithFlags('fromPixels + canvas npm package', NODE_ENVS, () => {
   let img: HTMLImageElement;
+  // tslint:disable-next-line:no-any
+  let canvas: any;
 
   beforeAll(async () => {
-    img = await loadImage('./src/ops/image_test.png');
+    // @ts-ignore
+    canvas = await import('canvas');
+    const path = await import('path');
+    img = await canvas.loadImage(path.join(__dirname, '../../image_test.png'));
   });
 
   it('canvas with the image drawn', async () => {
-    const canvas = createCanvas(img.width, img.height);
-    const ctx = canvas.getContext('2d');
+    const c = canvas.createCanvas(img.width, img.height);
+    const ctx = c.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    const t = tf.fromPixels(canvas);
+    const t = tf.fromPixels(c);
+    expect(t.dtype).toBe('int32');
+    expect(t.shape).toEqual([2, 2, 3]);
+    expectArraysEqual(t, [255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]);
+  });
+
+  it('context with the image drawn', async () => {
+    const ctx = canvas.createCanvas(img.width, img.height).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const t = tf.fromPixels(ctx);
     expect(t.dtype).toBe('int32');
     expect(t.shape).toEqual([2, 2, 3]);
     expectArraysEqual(t, [255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]);
   });
 
   it('empty canvas', async () => {
-    const canvas = createCanvas(img.width, img.height);
-    const t = tf.fromPixels(canvas);
+    const c = canvas.createCanvas(img.width, img.height);
+    const t = tf.fromPixels(c);
     expect(t.dtype).toBe('int32');
     expect(t.shape).toEqual([2, 2, 3]);
     expectArraysEqual(t, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -1273,7 +1286,7 @@ describeWithFlags('fromPixels + canvas npm package', NODE_ENVS, () => {
 
   it('image data ', async () => {
     const pixels = [1, 2, 3, 0, 4, 5, 6, 0, 7, 8, 9, 0, 10, 11, 12, 0];
-    const imgData = createImageData(new Uint8ClampedArray(pixels), 2, 2);
+    const imgData = canvas.createImageData(new Uint8ClampedArray(pixels), 2, 2);
     const t = tf.fromPixels(imgData);
     expect(t.dtype).toBe('int32');
     expect(t.shape).toEqual([2, 2, 3]);

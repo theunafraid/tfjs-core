@@ -162,7 +162,6 @@ export class MathBackendWebGL implements KernelBackend {
   private NUM_BYTES_BEFORE_PAGING: number;
 
   private canvas: HTMLCanvasElement;
-  private fromPixels2DContext: CanvasRenderingContext2D;
 
   private programTimersStack: TimerNode[];
   private activeTimers: TimerNode[];
@@ -184,44 +183,11 @@ export class MathBackendWebGL implements KernelBackend {
   }
 
   fromPixels(
-      pixels: ImageData|HTMLImageElement|HTMLCanvasElement|HTMLVideoElement,
+      pixels: ImageData|HTMLImageElement|HTMLCanvasElement,
       numChannels: number): Tensor3D {
-    if (pixels == null) {
-      throw new Error('pixels passed to tf.fromPixels() can not be null');
-    }
     const texShape: [number, number] = [pixels.height, pixels.width];
     const outShape = [pixels.height, pixels.width, numChannels];
 
-    if (!(pixels instanceof HTMLVideoElement) &&
-        !(pixels instanceof HTMLImageElement) &&
-        !(pixels instanceof HTMLCanvasElement) &&
-        !(pixels instanceof ImageData)) {
-      throw new Error(
-          'pixels passed to tf.fromPixels() must be either an ' +
-          `HTMLVideoElement, HTMLImageElement, HTMLCanvasElement or ` +
-          `ImageData, but was ${(pixels as {}).constructor.name}`);
-    }
-    if (pixels instanceof HTMLVideoElement) {
-      if (this.fromPixels2DContext == null) {
-        if (!ENV.get('IS_BROWSER')) {
-          throw new Error(
-              'Can\'t read pixels from HTMLImageElement outside the browser.');
-        }
-        if (document.readyState !== 'complete') {
-          throw new Error(
-              'The DOM is not ready yet. Please call tf.fromPixels() ' +
-              'once the DOM is ready. One way to do that is to add an event ' +
-              'listener for `DOMContentLoaded` on the document object');
-        }
-        this.fromPixels2DContext =
-            document.createElement('canvas').getContext('2d');
-      }
-      this.fromPixels2DContext.canvas.width = pixels.width;
-      this.fromPixels2DContext.canvas.height = pixels.height;
-      this.fromPixels2DContext.drawImage(
-          pixels, 0, 0, pixels.width, pixels.height);
-      pixels = this.fromPixels2DContext.canvas;
-    }
     const tempPixelHandle = this.makeTensorHandle(texShape, 'int32');
     // This is a byte texture with pixels.
     this.texData.get(tempPixelHandle.dataId).usage = TextureUsage.PIXELS;
@@ -1953,9 +1919,6 @@ export class MathBackendWebGL implements KernelBackend {
     }
     this.textureManager.dispose();
     this.canvas.remove();
-    if (this.fromPixels2DContext != null) {
-      this.fromPixels2DContext.canvas.remove();
-    }
     if (this.gpgpuCreatedLocally) {
       this.gpgpu.dispose();
     }

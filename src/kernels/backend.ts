@@ -32,7 +32,7 @@ export interface TensorStorage {
   disposeData(dataId: DataId): void;
   write(dataId: DataId, values: DataValues): void;
   fromPixels(
-      pixels: ImageData|HTMLImageElement|HTMLCanvasElement|HTMLVideoElement,
+      pixels: ImageData|HTMLImageElement|HTMLCanvasElement,
       numChannels: number): Tensor3D;
   register(dataId: DataId, shape: number[], dtype: DataType): void;
   memory(): {unreliable: boolean;};  // Backend-specific information.
@@ -100,7 +100,7 @@ export class KernelBackend implements TensorStorage, BackendTimer {
     throw new Error('Not yet implemented.');
   }
   fromPixels(
-      pixels: ImageData|HTMLImageElement|HTMLCanvasElement|HTMLVideoElement,
+      pixels: ImageData|HTMLImageElement|HTMLCanvasElement,
       numChannels: number): Tensor<Rank.R3> {
     throw new Error('Not yet implemented.');
   }

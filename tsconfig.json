@@ -17,11 +17,7 @@
     "noUnusedParameters": false,
     "pretty": true,
     "noFallthroughCasesInSwitch": true,
-    "allowUnreachableCode": false,
-    "baseUrl": ".",
-    "paths": {
-      "canvas": ["src/canvas"]
-    }
+    "allowUnreachableCode": false
   },
   "include": [
     "src/"

@@ -98,43 +98,19 @@ export class MathBackendCPU implements KernelBackend {
     this.data.get(dataId).values = values;
   }
   fromPixels(
-      pixels: ImageData|HTMLImageElement|HTMLCanvasElement|HTMLVideoElement,
+      pixels: ImageData|HTMLImageElement|HTMLCanvasElement,
       numChannels: number): Tensor3D {
-    if (pixels == null) {
-      throw new Error('pixels passed to tf.fromPixels() can not be null');
-    }
     let vals: Uint8ClampedArray;
-    if (ENV.get('IS_NODE') && pixels.width != null &&
-        // tslint:disable-next-line:no-any
-        (pixels as any).naturalWidth != null) {
-      throw new Error(
-          'Looks like you are using the `canvas` npm package and passed an ' +
-          'image to tf.fromPixels(), however you should pass a canvas instead');
-    }
     // tslint:disable-next-line:no-any
-    if (ENV.get('IS_NODE') && (pixels as any).getContext == null &&
-        // tslint:disable-next-line:no-any
-        (pixels as any).data == null) {
-      throw new Error(
-          'When running in node, pixels must be a canvas like the one ' +
-          'returned by the `canvas` npm package');
-    }
-    // tslint:disable-next-line:no-any
-    if ((pixels as any).getContext != null) {
-      // tslint:disable-next-line:no-any
-      vals = (pixels as any)
-                 .getContext('2d')
+    const input = pixels as any;
+
+    if (input.getContext != null) {
+      vals = input.getContext('2d')
                  .getImageData(0, 0, pixels.width, pixels.height)
                  .data;
-    } else if (
-        // tslint:disable-next-line:no-any
-        ((pixels as any).data != null && pixels.width != null) ||
-        pixels instanceof ImageData) {
-      // tslint:disable-next-line:no-any
-      vals = (pixels as any).data;
-    } else if (
-        pixels instanceof HTMLImageElement ||
-        pixels instanceof HTMLVideoElement) {
+    } else if ((input.data != null && pixels.width != null)) {
+      vals = input.data;
+    } else if (pixels instanceof HTMLImageElement) {
       if (this.fromPixels2DContext == null) {
         throw new Error(
             'Can\'t read pixels from HTMLImageElement outside ' +
