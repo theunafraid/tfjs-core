@@ -75,14 +75,13 @@ export function parseAxisParam(
   // Check for valid range
   util.assert(
       axis.every(ax => ax >= -rank && ax < rank),
-      `All values in axis param must be in range [-${rank}, ${rank}) but ` +
-          `got axis ${axis}`);
+      () => `All values in axis param must be in range [-${rank}, ${rank}) ` +
+          `but got axis ${axis}`);
 
   // Check for only integers
   util.assert(
       axis.every(ax => util.isInt(ax)),
-      `All values in axis param must be integers but ` +
-          `got axis ${axis}`);
+      () => `All values in axis param must be integers but got axis ${axis}`);
 
   // Handle negative axis.
   return axis.map(a => a < 0 ? rank + a : a);
@@ -92,7 +91,7 @@ export function assertAxesAreInnerMostDims(
     msg: string, axes: number[], rank: number): void {
   util.assert(
       axesAreInnerMostDims(axes, rank),
-      `${msg} supports only inner-most axes for now. ` +
+      () => `${msg} supports only inner-most axes for now. ` +
           `Got axes ${axes} and rank-${rank} input.`);
 }
 

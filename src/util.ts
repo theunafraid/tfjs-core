@@ -76,9 +76,9 @@ export function distSquared(a: FlatVector, b: FlatVector): number {
   return result;
 }
 
-export function assert(expr: boolean, msg: string|(() => string)) {
+export function assert(expr: boolean, msg: () => string) {
   if (!expr) {
-    throw new Error(typeof msg === 'string' ? msg : msg());
+    throw new Error(msg());
   }
 }
 
@@ -86,13 +86,13 @@ export function assertShapesMatch(
     shapeA: number[], shapeB: number[], errorMessagePrefix = ''): void {
   assert(
       arraysEqual(shapeA, shapeB),
-      errorMessagePrefix + ` Shapes ${shapeA} and ${shapeB} must match`);
+      () => errorMessagePrefix + ` Shapes ${shapeA} and ${shapeB} must match`);
 }
 
 export function assertNonNull(a: TensorLike): void {
   assert(
       a != null,
-      `The input to the tensor constructor must be a non-null value.`);
+      () => `The input to the tensor constructor must be a non-null value.`);
 }
 
 // NOTE: We explicitly type out what T extends instead of any so that
@@ -279,9 +279,9 @@ export function squeezeShape(shape: number[], axis?: number[]):
     for (let i = 0; i < axis.length; ++i) {
       if (axis[i] < -shape.length || axis[i] >= shape.length) {
         throw new Error(
-          `Can't squeeze axis ${axis[i]} since its not in ` +
-          `[-${shape.length}, ${shape.length}) for shape ${shape}`);
-      } 
+            `Can't squeeze axis ${axis[i]} since its not in ` +
+            `[-${shape.length}, ${shape.length}) for shape ${shape}`);
+      }
       if (axis[i] < 0) {
         axis[i] = shape.length + axis[i];
       }

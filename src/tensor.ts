@@ -46,7 +46,7 @@ export class TensorBuffer<R extends Rank, D extends DataType = 'float32'> {
       const n = values.length;
       util.assert(
           n === this.size,
-          `Length of values '${n}' does not match the size ` +
+          () => `Length of values '${n}' does not match the size ` +
               `inferred by the shape '${this.size}'.`);
     }
     if (dtype === 'complex64') {
@@ -73,7 +73,7 @@ export class TensorBuffer<R extends Rank, D extends DataType = 'float32'> {
     }
     util.assert(
         locs.length === this.rank,
-        `The number of provided coordinates (${locs.length}) must ` +
+        () => `The number of provided coordinates (${locs.length}) must ` +
             `match the rank (${this.rank})`);
 
     const index = this.locToIndex(locs);
@@ -441,7 +441,7 @@ export class Tensor<R extends Rank = Rank> {
   /** @doc {heading: 'Tensors', subheading: 'Classes'} */
   asScalar(): Scalar {
     this.throwIfDisposed();
-    util.assert(this.size === 1, 'The array must have only 1 element.');
+    util.assert(this.size === 1, () => 'The array must have only 1 element.');
     return this.reshape<Rank.R0>([]);
   }
 
@@ -533,10 +533,11 @@ export class Tensor<R extends Rank = Rank> {
   get(...locs: number[]) {
     util.assert(
         locs.length === this.rank,
-        'Number of coordinates in get() must match the rank of the tensor');
+        () =>
+            'Number of coordinates in get() must match the rank of the tensor');
     util.assert(
         this.dtype !== 'complex64',
-        'Tensor.get() is not supported for complex64 tensors yet.');
+        () => 'Tensor.get() is not supported for complex64 tensors yet.');
     this.throwIfDisposed();
     if (locs.length === 0) {
       locs = [0];

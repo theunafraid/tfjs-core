@@ -56,26 +56,29 @@ function batchNormalization2d_(
   }
   util.assert(
       $x.rank === 2,
-      `Error in batchNormalization3D: x must be rank 3 but got rank ` +
+      () => `Error in batchNormalization3D: x must be rank 3 but got rank ` +
           `${$x.rank}.`);
   util.assert(
       $mean.rank === 2 || $mean.rank === 1,
-      `Error in batchNormalization2D: mean must be rank 2 or rank 1 but ` +
+      () =>
+          `Error in batchNormalization2D: mean must be rank 2 or rank 1 but ` +
           `got rank ${$mean.rank}.`);
   util.assert(
       $variance.rank === 2 || $variance.rank === 1,
-      `Error in batchNormalization2D: variance must be rank 2 or rank 1 ` +
+      () =>
+          `Error in batchNormalization2D: variance must be rank 2 or rank 1 ` +
           `but got rank ${$variance.rank}.`);
   if ($scale != null) {
     util.assert(
         $scale.rank === 2 || $scale.rank === 1,
-        `Error in batchNormalization2D: scale must be rank 2 or rank 1 ` +
+        () => `Error in batchNormalization2D: scale must be rank 2 or rank 1 ` +
             `but got rank ${$scale.rank}.`);
   }
   if ($offset != null) {
     util.assert(
         $offset.rank === 2 || $offset.rank === 1,
-        `Error in batchNormalization2D: offset must be rank 2 or rank 1 ` +
+        () =>
+            `Error in batchNormalization2D: offset must be rank 2 or rank 1 ` +
             `but got rank ${$offset.rank}.`);
   }
 
@@ -112,26 +115,29 @@ function batchNormalization3d_(
   }
   util.assert(
       $x.rank === 3,
-      `Error in batchNormalization3D: x must be rank 3 but got rank ` +
+      () => `Error in batchNormalization3D: x must be rank 3 but got rank ` +
           `${$x.rank}.`);
   util.assert(
       $mean.rank === 3 || $mean.rank === 1,
-      `Error in batchNormalization3D: mean must be rank 3 or rank 1 but ` +
+      () =>
+          `Error in batchNormalization3D: mean must be rank 3 or rank 1 but ` +
           `got rank ${$mean.rank}.`);
   util.assert(
       $variance.rank === 3 || $variance.rank === 1,
-      `Error in batchNormalization3D: variance must be rank 3 or rank 1 ` +
+      () =>
+          `Error in batchNormalization3D: variance must be rank 3 or rank 1 ` +
           `but got rank ${$variance.rank}.`);
   if ($scale != null) {
     util.assert(
         $scale.rank === 3 || $scale.rank === 1,
-        `Error in batchNormalization3D: scale must be rank 3 or rank 1 ` +
+        () => `Error in batchNormalization3D: scale must be rank 3 or rank 1 ` +
             `but got rank ${$scale.rank}.`);
   }
   if ($offset != null) {
     util.assert(
         $offset.rank === 3 || $offset.rank === 1,
-        `Error in batchNormalization3D: offset must be rank 3 or rank 1 ` +
+        () =>
+            `Error in batchNormalization3D: offset must be rank 3 or rank 1 ` +
             `but got rank ${$offset.rank}.`);
   }
 
@@ -168,26 +174,29 @@ function batchNormalization4d_(
   }
   util.assert(
       $x.rank === 4,
-      `Error in batchNormalization4D: x must be rank 4 but got rank ` +
+      () => `Error in batchNormalization4D: x must be rank 4 but got rank ` +
           `${$x.rank}.`);
   util.assert(
       $mean.rank === 4 || $mean.rank === 1,
-      `Error in batchNormalization4D: mean must be rank 4 or rank 1 but ` +
+      () =>
+          `Error in batchNormalization4D: mean must be rank 4 or rank 1 but ` +
           `got rank ${$mean.rank}.`);
   util.assert(
       $variance.rank === 4 || $variance.rank === 1,
-      `Error in batchNormalization4D: variance must be rank 4 or rank 1 ` +
+      () =>
+          `Error in batchNormalization4D: variance must be rank 4 or rank 1 ` +
           `but got rank ${$variance.rank}.`);
   if ($scale != null) {
     util.assert(
         $scale.rank === 4 || $scale.rank === 1,
-        `Error in batchNormalization4D: scale must be rank 4 or rank 1 ` +
+        () => `Error in batchNormalization4D: scale must be rank 4 or rank 1 ` +
             `but got rank ${$scale.rank}.`);
   }
   if ($offset != null) {
     util.assert(
         $offset.rank === 4 || $offset.rank === 1,
-        `Error in batchNormalization4D: offset must be rank 4 or rank 1 ` +
+        () =>
+            `Error in batchNormalization4D: offset must be rank 4 or rank 1 ` +
             `but got rank ${$offset.rank}.`);
   }
   return batchNormalization(
@@ -238,15 +247,15 @@ function batchNormalization_<R extends Rank>(
 
   util.assert(
       $mean.rank === $variance.rank,
-      'Batch normalization gradient requires mean and variance to have ' +
+      () => 'Batch normalization gradient requires mean and variance to have ' +
           'equal ranks.');
   util.assert(
       $offset == null || $mean.rank === $offset.rank,
-      'Batch normalization gradient requires mean and offset to have ' +
+      () => 'Batch normalization gradient requires mean and offset to have ' +
           'equal ranks.');
   util.assert(
       $scale == null || $mean.rank === $scale.rank,
-      'Batch normalization gradient requires mean and scale to have ' +
+      () => 'Batch normalization gradient requires mean and scale to have ' +
           'equal ranks.');
 
   let x4D: Tensor4D;

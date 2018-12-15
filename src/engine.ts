@@ -474,7 +474,8 @@ export class Engine implements TensorManager, DataMover {
   gradients<T extends Tensor>(
       f: () => T, xs: Tensor[], dy?: T,
       allowNoGradients = false): {value: T, grads: Tensor[]} {
-    util.assert(xs.length > 0, 'gradients() received an empty list of xs.');
+    util.assert(
+        xs.length > 0, () => 'gradients() received an empty list of xs.');
     if (dy != null && dy.dtype !== 'float32') {
       throw new Error(`dy must have 'float32' dtype, but has '${dy.dtype}'`);
     }
@@ -483,7 +484,7 @@ export class Engine implements TensorManager, DataMover {
       const y = f();
       util.assert(
           y instanceof Tensor,
-          'The result y returned by f() must be a tensor.');
+          () => 'The result y returned by f() must be a tensor.');
       // Filter out the nodes that don't connect x => y.
       const filteredTape = getFilteredNodesXToY(this.activeTape, xs, y);
       if (!allowNoGradients && filteredTape.length === 0 && xs.length > 0) {
@@ -508,11 +509,12 @@ export class Engine implements TensorManager, DataMover {
       (...args: Tensor[]) => T {
     util.assert(
         util.isFunction(f),
-        'The f passed in customGrad(f) must be a function.');
+        () => 'The f passed in customGrad(f) must be a function.');
     return (...inputs: Tensor[]): T => {
       util.assert(
           inputs.every(t => t instanceof Tensor),
-          'The args passed in customGrad(f)(x1, x2,...) must all be tensors');
+          () => 'The args passed in customGrad(f)(x1, x2,...) must all be' +
+              ' tensors');
 
       let gradientsFunc: (dy: T) => Tensor | Tensor[];
       let result: T;
@@ -524,11 +526,13 @@ export class Engine implements TensorManager, DataMover {
               const {value, gradFunc} = f(...inputs);
               util.assert(
                   value instanceof Tensor,
-                  'The function f passed in customGrad(f) must return an ' +
+                  () =>
+                      'The function f passed in customGrad(f) must return an ' +
                       'object where `obj.value` is a tensor');
               util.assert(
                   util.isFunction(gradFunc),
-                  'The function f passed in customGrad(f) must return an ' +
+                  () =>
+                      'The function f passed in customGrad(f) must return an ' +
                       'object where `obj.gradFunc` is a function.');
               gradientsFunc = gradFunc;
               return value;
@@ -541,14 +545,14 @@ export class Engine implements TensorManager, DataMover {
           const grads: Tensor[] = Array.isArray(res) ? res : [res];
           util.assert(
               grads.length === inputs.length,
-              'The function f passed in customGrad(f) must return an object ' +
-                  'where `obj.gradFunc` is a function that returns the same ' +
-                  'number of tensors as inputs passed to f(...).');
+              () => 'The function f passed in customGrad(f) must return an ' +
+                  'object where `obj.gradFunc` is a function that returns ' +
+                  'the same number of tensors as inputs passed to f(...).');
           util.assert(
               grads.every(t => t instanceof Tensor),
-              'The function f passed in customGrad(f) must return an object ' +
-                  'where `obj.gradFunc` is a function that returns a list of ' +
-                  'only tensors.');
+              () => 'The function f passed in customGrad(f) must return an ' +
+                  'object where `obj.gradFunc` is a function that returns a ' +
+                  'list of only tensors.');
           return grads;
         };
         this.addTapeNode(inputs, result, gradFunc);
