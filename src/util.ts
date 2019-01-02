@@ -191,29 +191,15 @@ export function rightPad(a: string, size: number): string {
   return a + ' '.repeat(size - a.length);
 }
 
-export function repeatedTry(
-    checkFn: () => boolean, delayFn = (counter: number) => 0,
-    maxCounter?: number): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    let tryCount = 0;
-
+export function repeatedTry(checkFn: () => boolean): Promise<void> {
+  return new Promise(resolve => {
     const tryFn = () => {
       if (checkFn()) {
         resolve();
         return;
       }
-
-      tryCount++;
-
-      const nextBackoff = delayFn(tryCount);
-
-      if (maxCounter != null && tryCount >= maxCounter) {
-        reject();
-        return;
-      }
-      setTimeout(tryFn, nextBackoff);
+      setTimeout(tryFn, 0);
     };
-
     tryFn();
   });
 }

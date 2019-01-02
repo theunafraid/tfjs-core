@@ -76,6 +76,7 @@ import {GPGPUBinary, GPGPUProgram, TensorData} from './webgl/gpgpu_math';
 import {Im2ColProgram} from './webgl/im2col_gpu';
 import {LRNProgram} from './webgl/lrn_gpu';
 import {LRNGradProgram} from './webgl/lrn_grad_gpu';
+import {LRUCache} from './webgl/lru';
 import {MaxPool2DBackpropProgram} from './webgl/max_pool_backprop_gpu';
 import {MatMulProgram} from './webgl/mulmat_gpu';
 import {MatMulPackedProgram} from './webgl/mulmat_packed_gpu';
@@ -155,7 +156,7 @@ export class MathBackendWebGL implements KernelBackend {
   private pendingDisposal = new WeakSet<DataId>();
   // List of data ids that are currently residing on gpu memory. Sorted with
   // least recently used being first.
-  private lruDataGPU: DataId[] = [];
+  private lruDataGPU = new LRUCache();
   private numBytesInGPU = 0;
 
   private canvas: HTMLCanvasElement;
@@ -1984,8 +1985,11 @@ export class MathBackendWebGL implements KernelBackend {
     const numBytesBeforePaging = ENV.get('WEBGL_NUM_MB_BEFORE_PAGING') * 1024;
     if (pageToCpu && this.numBytesInGPU > numBytesBeforePaging) {
       let numBytesToPage = this.numBytesInGPU - numBytesBeforePaging;
-      while (numBytesToPage > 0 && this.lruDataGPU.length > 0) {
-        const dataId = this.lruDataGPU.shift();
+      while (numBytesToPage > 0) {
+        const dataId = this.lruDataGPU.pop();
+        if (dataId == null) {
+          break;
+        }
         const {shape, dtype} = this.texData.get(dataId);
         numBytesToPage -= this.computeBytes(shape, dtype);
         this.read(dataId);
@@ -2057,14 +2061,9 @@ export class MathBackendWebGL implements KernelBackend {
     const texData = this.texData.get(dataId);
     const {shape, values, texture, usage, isPacked} = texData;
     if (texture != null) {
-      // Array is already on GPU. No-op.
-      // Touching the texture.
+      // Array is already on GPU. No-op, but touching the texture.
       if (ENV.get('WEBGL_NUM_MB_BEFORE_PAGING') < Number.POSITIVE_INFINITY) {
-        const index = this.lruDataGPU.indexOf(dataId);
-        if (index >= 0) {
-          this.lruDataGPU.splice(this.lruDataGPU.indexOf(dataId), 1);
-          this.lruDataGPU.push(dataId);
-        }
+        this.lruDataGPU.touch(dataId);
       }
       return;
     }
@@ -2129,10 +2128,7 @@ export class MathBackendWebGL implements KernelBackend {
     const {shape, dtype} = this.texData.get(dataId);
 
     if (ENV.get('WEBGL_NUM_MB_BEFORE_PAGING') < Number.POSITIVE_INFINITY) {
-      const idx = this.lruDataGPU.indexOf(dataId);
-      if (idx >= 0) {
-        this.lruDataGPU.splice(idx, 1);
-      }
+      this.lruDataGPU.remove(dataId);
     }
     this.numBytesInGPU -= this.computeBytes(shape, dtype);
     this.textureManager.releaseTexture(texture, texShape, texType, isPacked);
@@ -2143,7 +2139,7 @@ export class MathBackendWebGL implements KernelBackend {
       isPacked: boolean): WebGLTexture {
     const {shape, dtype} = this.texData.get(dataId);
     if (ENV.get('WEBGL_NUM_MB_BEFORE_PAGING') < Number.POSITIVE_INFINITY) {
-      this.lruDataGPU.push(dataId);
+      this.lruDataGPU.touch(dataId);
     }
     this.numBytesInGPU += this.computeBytes(shape, dtype);
     return this.textureManager.acquireTexture(texShape, texType, isPacked);

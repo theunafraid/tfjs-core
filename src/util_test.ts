@@ -75,8 +75,7 @@ describe('Util', () => {
 
   it('infer shape 4d array', () => {
     const a = [
-      [[[1], [2]], [[2], [3]], [[5], [6]]],
-      [[[5], [6]], [[4], [5]], [[1], [2]]]
+      [[[1], [2]], [[2], [3]], [[5], [6]]], [[[5], [6]], [[4], [5]], [[1], [2]]]
     ];
     expect(inferShape(a)).toEqual([2, 3, 2, 1]);
   });
@@ -175,15 +174,6 @@ describe('util.repeatedTry', () => {
     util.repeatedTry(checkFn).then(doneFn).catch(() => {
       throw new Error('Rejected backoff.');
     });
-  });
-  it('rejects', (doneFn) => {
-    const checkFn = () => false;
-
-    util.repeatedTry(checkFn, () => 0, 5)
-        .then(() => {
-          throw new Error('Backoff resolved');
-        })
-        .catch(doneFn);
   });
 });
 
