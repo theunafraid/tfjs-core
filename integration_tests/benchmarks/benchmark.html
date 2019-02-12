@@ -166,18 +166,29 @@
       <tbody></tbody>
     </table>
   </div>
-  <script src="https://unpkg.com/@tensorflow/tfjs-core/dist/tf-core.js"></script>
-  <script src="https://unpkg.com/@tensorflow/tfjs-layers/dist/tf-layers.js"></script>
+
+
+
+  <!-- OLD -->
+  <!-- <script src="https://unpkg.com/@tensorflow/tfjs@0.11.7/dist/tf.js"></script> -->
+
+
+  <!-- NEW -->
+  <script src="./tf-core.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-converter/dist/tf-converter.js"></script>
+
+
+
   <script>
+    console.warn = function() {};
     'use strict';
     async function load() {
       //////////////////////////////////
       // Place model loading code here.
       //////////////////////////////////
       return await tf.loadFrozenModel(
-        'https://storage.googleapis.com/tfjs-models/savedmodel/mobilenet_v2_1.0_224/tensorflowjs_model.pb',
-        'https://storage.googleapis.com/tfjs-models/savedmodel/mobilenet_v2_1.0_224/weights_manifest.json');
+        'https://storage.googleapis.com/tfjs-models/savedmodel/mobilenet_v1_1.0_224/optimized_model.pb',
+        'https://storage.googleapis.com/tfjs-models/savedmodel/mobilenet_v1_1.0_224/weights_manifest.json');
     }
 
     const zeros = tf.zeros([1, 224, 224, 3]);
@@ -185,16 +196,13 @@
       //////////////////////////////////
       // Place model prediction code here.
       //////////////////////////////////
-      if (isAsync) {
-        return model.executeAsync(zeros);
-      }
       return model.predict(zeros);
     }
   </script>
   <script>
     'use strict';
     const state = {
-      numRuns: 50,
+      numRuns: 200,
     };
     const modalDiv = document.getElementById('modal-msg');
     const timeTable = document.querySelector('#timings tbody');
@@ -221,7 +229,6 @@
     }
 
     async function showEnvironment() {
-      await tf.time(() => tf.square(3).data());
       envDiv.innerHTML += `<br/>${JSON.stringify(tf.ENV.features, null, 2)}`;
     }
 
@@ -409,20 +416,21 @@
       });
       showVersions();
       await showEnvironment();
+      console.log("showed versions");
       await loadAndRecordTime();
       await warmUpAndRecordTime();
       await showMsg('Waiting for GC');
       await sleep(1000);
-      await profileMemory();
+      // await profileMemory();
       await sleep(200);
       await measureAveragePredictTime();
-      await sleep(200);
-      if (queryTimerIsEnabled()) {
-        await profileKernelTime();
-      } else {
-        showMsg('Skipping kernel times since query timer extension is not ' +
-                'available. <br/> Use Chrome 70+.');
-      };
+      // await sleep(200);
+      // if (queryTimerIsEnabled()) {
+      //   await profileKernelTime();
+      // } else {
+      //   showMsg('Skipping kernel times since query timer extension is not ' +
+      //           'available. <br/> Use Chrome 70+.');
+      // };
     }
     onPageLoad();
   </script>
