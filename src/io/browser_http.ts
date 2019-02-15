@@ -52,7 +52,7 @@ export class BrowserHTTPRequest implements IOHandler {
       }
       // Make sure fetch is always bound to window (the
       // original object) when available.
-      fetchFunc = fetch.bind(typeof window === 'undefined' ? null : window);
+      fetchFunc = fetch;//fetch.bind(typeof window === 'undefined' ? null : window);
     } else {
       assert(
           typeof fetchFunc === 'function',
